@@ -1,0 +1,3 @@
+[workspace]
+members = ["teensy-audio"]
+resolver = "2"
