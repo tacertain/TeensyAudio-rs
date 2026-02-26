@@ -6,12 +6,13 @@ license = "MIT"
 description = "Audio processing framework for Teensy 4.x in Rust"
 
 [features]
-default = ["dsp"]
-sgtl5000 = []
+default = ["dsp", "sgtl5000"]
+sgtl5000 = ["dep:embedded-hal"]
 i2s = []
 dma = []
 dsp = []
 
 [dependencies]
+embedded-hal = { version = "1.0", optional = true }
 
 [dev-dependencies]

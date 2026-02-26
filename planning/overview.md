@@ -16,7 +16,7 @@ The C++ library has ~84 `AudioStream` subclasses across ~170 source files. This 
 | 1 | Core Audio Framework (`teensy-audio` crate) | **Complete** | [phase1-core-framework.md](phase1-core-framework.md) |
 | 2 | I/O Drivers | **Complete** | [phase2-io-drivers.md](phase2-io-drivers.md) |
 | 2.5 | Software Integration Tests | **Complete** | [phase2.5-integration-tests.md](phase2.5-integration-tests.md) |
-| 3 | SGTL5000 Codec Driver | Not started | [phase3-sgtl5000-driver.md](phase3-sgtl5000-driver.md) |
+| 3 | SGTL5000 Codec Driver | **Complete** | [phase3-sgtl5000-driver.md](phase3-sgtl5000-driver.md) |
 | 4 | DSP Nodes (Initial Set) | Not started | [phase4-dsp-nodes.md](phase4-dsp-nodes.md) |
 | 5 | Integration & Polish | Not started | [phase5-integration.md](phase5-integration.md) |
 
@@ -50,6 +50,20 @@ The C++ library has ~84 `AudioStream` subclasses across ~170 source files. This 
 - Pool accounting (zero block leaks after full pipeline drain)
 - Empty pipeline silence (underrun produces zeros)
 - 94 total tests passing
+
+**Phase 3** delivered the `codec` module with a full-featured SGTL5000 driver:
+- `Sgtl5000<I2C, D>` — generic over `embedded_hal::i2c::I2c` + `embedded_hal::delay::DelayNs`
+- Complete register map (~50 registers with bitfield documentation)
+- Full power-on sequence with 400 ms analog ramp (slave + PLL master modes)
+- Headphone volume (0.0–1.0 with auto-mute/unmute), independent L/R control
+- Input selection (line-in / mic with configurable preamp gain 0–63 dB)
+- DAC volume with ramp modes (exponential, linear, disabled)
+- Line-in/out level control with range clamping
+- ADC high-pass filter modes (enable/freeze/bypass)
+- Digital Audio Processor: pre/post-processor routing, 5-band graphic EQ, 2-band tone, 7-band PEQ with raw biquad coefficient loading, surround sound, bass enhancement
+- `AudioControl` trait implementation for codec-generic code
+- Mock I2C + delay test harness for host-side verification
+- 24 unit tests (118 total); all passing
 
 ## Key Design Decisions
 

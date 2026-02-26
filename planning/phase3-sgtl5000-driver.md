@@ -1,6 +1,54 @@
 # Phase 3: SGTL5000 Codec Driver
 
+**Status: Complete**
+
 The SGTL5000 is the audio codec on the Teensy Audio Shield. This phase builds a proper Rust driver, replacing the ~90-line inline demo in the imxrt-hal examples with a full-featured module ported from the 1075-line C++ driver.
+
+## Implementation Summary
+
+| Component | File | Lines | Tests |
+|-----------|------|-------|-------|
+| Register map | `codec/registers.rs` | ~200 | — |
+| Driver struct + methods | `codec/sgtl5000.rs` | ~630 | 24 |
+| Module root | `codec/mod.rs` | ~14 | — |
+| **Total** | | **~850** | **24** |
+
+### Design decisions
+- Driver is `Sgtl5000<I2C, D>` generic over `embedded_hal::i2c::I2c` + `embedded_hal::delay::DelayNs`
+- `embedded-hal` v1.0 added as optional dependency behind `sgtl5000` feature (default-on)
+- `ana_ctrl` cached on every write to `CHIP_ANA_CTRL` (matching C++ pattern for fast mute/select)
+- `semi_automated` flag replicates C++ auto-DAP-mode-select behaviour for EQ functions
+- `AudioControl` trait implemented via delegation to inherent methods
+- Mock I2C with register-file backend enables host-side testing without hardware
+- `headphoneSelect()` C++ bit-set behaviour replicated exactly (matches C++ code, potential register description inversion documented)
+
+### Test coverage
+| Test | Validates |
+|------|-----------|
+| `enable_writes_correct_sequence` | All 16 register writes in slave-mode power-on |
+| `enable_caches_ana_ctrl` | ANA_CTRL cached as 0x0036 after enable |
+| `volume_zero_mutes` | HP register and mute flag |
+| `volume_full_scale` | HP register 0x0000 (+12 dB) |
+| `volume_mid_range` | HP register 0x4040 at 50% |
+| `volume_auto_unmutes` | Muted → volume → unmuted |
+| `volume_lr_independent_channels` | Left max / right min |
+| `mute_unmute_headphone` | MUTE_HP bit toggle |
+| `mute_unmute_lineout` | MUTE_LO bit toggle |
+| `input_select_linein` | ADC gain + SELECT_ADC bit |
+| `input_select_mic` | MIC_CTRL + ADC gain + SELECT_ADC bit |
+| `headphone_select_toggles_bit` | SELECT_HP bit for Dac/LineIn |
+| `line_in_level_clamps_to_15` | Value clamped from 20 → 15 |
+| `line_out_level_clamps_range` | 5 → 13, 40 → 31 |
+| `mic_gain_40db` | Preamp=3, input=0 |
+| `mic_gain_63db` | Preamp=3, input=15 (max) |
+| `mic_gain_25db` | Preamp=1, input=3 |
+| `dac_volume_ramp_modes` | Exponential/linear/disabled bits |
+| `modify_preserves_unmasked_bits` | Read-modify-write correctness |
+| `audio_processor_routing` | Pre/post/disable DAP routing |
+| `calc_vol_boundaries` | 0.0 → 0, 1.0 → max, 0.5 → mid |
+| `audio_control_trait_delegation` | Trait calls delegate to inherent methods |
+| `custom_address` | Alternate I2C address (0x2A) |
+| `release_returns_peripherals` | Peripheral ownership recovery |
 
 ## 3.1 Register map
 

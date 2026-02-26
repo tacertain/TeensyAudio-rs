@@ -6,5 +6,8 @@ pub mod node;
 pub mod control;
 pub mod io;
 
+#[cfg(feature = "sgtl5000")]
+pub mod codec;
+
 #[cfg(feature = "dsp")]
 pub mod dsp;
