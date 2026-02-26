@@ -36,3 +36,6 @@ pub use output_i2s::{AudioOutputI2S, DmaHalf};
 pub use input_i2s::AudioInputI2S;
 pub use play_queue::AudioPlayQueue;
 pub use record_queue::AudioRecordQueue;
+
+#[cfg(test)]
+mod integration_tests;

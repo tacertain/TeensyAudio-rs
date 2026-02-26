@@ -15,6 +15,7 @@ The C++ library has ~84 `AudioStream` subclasses across ~170 source files. This 
 | 0 | Fork & Extend teensy4-rs (HAL Prerequisites) | **Complete** | [phase0-hal-prerequisites.md](phase0-hal-prerequisites.md) |
 | 1 | Core Audio Framework (`teensy-audio` crate) | **Complete** | [phase1-core-framework.md](phase1-core-framework.md) |
 | 2 | I/O Drivers | **Complete** | [phase2-io-drivers.md](phase2-io-drivers.md) |
+| 2.5 | Software Integration Tests | **Complete** | [phase2.5-integration-tests.md](phase2.5-integration-tests.md) |
 | 3 | SGTL5000 Codec Driver | Not started | [phase3-sgtl5000-driver.md](phase3-sgtl5000-driver.md) |
 | 4 | DSP Nodes (Initial Set) | Not started | [phase4-dsp-nodes.md](phase4-dsp-nodes.md) |
 | 5 | Integration & Polish | Not started | [phase5-integration.md](phase5-integration.md) |
@@ -41,6 +42,14 @@ The C++ library has ~84 `AudioStream` subclasses across ~170 source files. This 
 - `interleave` utilities — `interleave_lr`, `interleave_l`, `interleave_r`, `deinterleave`, `silence`
 - Hardware-agnostic ISR design: `isr()` accepts `&mut [u32; 128]` + `DmaHalf`, decoupled from HAL types for RTIC flexibility
 - 46 new unit tests (88 total); all passing
+
+**Phase 2.5** added 6 software integration tests exercising the full I/O pipeline loopback:
+- Full stereo loopback: PlayQueue → OutputI2S → DMA buffer → InputI2S → RecordQueue (sample-perfect round-trip)
+- Multi-block streaming (4 blocks, FIFO ordering verified)
+- Left-only and right-only no-crosstalk tests
+- Pool accounting (zero block leaks after full pipeline drain)
+- Empty pipeline silence (underrun produces zeros)
+- 94 total tests passing
 
 ## Key Design Decisions
 
