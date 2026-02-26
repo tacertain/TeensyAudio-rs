@@ -57,15 +57,31 @@ The macro generates:
    - Converts outputs to `AudioBlockRef` for downstream routing
    - Fan-out handled via `AudioBlockRef::clone()`
 
-### Tests (8 new)
+### Tests (8 unit + 15 verification = 23 new)
+
+**Unit tests (graph/mod.rs):**
 - Graph creation and field access
 - Source → analyzer routing
 - Multi-node chain with fan-out (peak + RMS from same amplifier)
 - Mixer with multiple inputs and unconnected slots
 - Envelope modulation chain
 - DC source level accuracy
-- Silent source (zero amplitude, no spurious output)
+- Silent source (zero amplitude, zeroed block passthrough)
 - Multiple update cycles (pool recycling, no leaks)
+
+**Verification tests (graph/verification_tests.rs):**
+- ADSR envelope shapes tone (idle → attack → sustain → release level progression)
+- Pool accounting: zero block leaks after update cycles
+- Pool accounting: zero leaks with fan-out graphs
+- Streaming stability: 100 consecutive cycles with signal validation
+- Gain staging: half gain, quarter gain, zero attenuation
+- Fan-out correctness: identical levels at both consumers
+- Mixer summing accuracy: two DC sources, gain weighting
+- Fade-in increases output over time
+- Fade-out decreases output below full level
+- Full synthesizer chain: 2 oscillators → 2 envelopes → mixer → amplifier → analyzers
+- RMS DC accuracy: RMS of constant signal equals amplitude
+- Block count/duration sanity check (128 samples ≈ 2.9 ms)
 
 ## 5.2 Documentation — **COMPLETE**
 

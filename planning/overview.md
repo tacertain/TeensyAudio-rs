@@ -82,7 +82,7 @@ The C++ library has ~84 `AudioStream` subclasses across ~170 source files. This 
 - Comprehensive crate-level rustdoc on `lib.rs` — module table, quick-start example, feature/parameter reference
 - Full README rewrite — architecture diagram, quick-start guide, module/node tables, build instructions, roadmap
 - GitHub Actions CI workflow — `cargo fmt`, `cargo clippy`, `cargo test`, `cargo check --target thumbv7em-none-eabihf`, `cargo doc`
-- 8 new graph macro tests (177+ total); all passing
+- 23 new tests (8 unit + 15 verification); 192 total, all passing
 
 ## Key Design Decisions
 

@@ -119,6 +119,9 @@ macro_rules! audio_graph {
 }
 
 #[cfg(test)]
+mod verification_tests;
+
+#[cfg(test)]
 mod tests {
     use crate::block::pool::POOL;
 
