@@ -1,0 +1,35 @@
+[package]
+name = "teensy-audio-examples"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "Hardware examples for teensy-audio on Teensy 4.1 + Audio Shield"
+autoexamples = false
+
+[dependencies]
+teensy-audio = { path = "../teensy-audio", features = ["dsp", "sgtl5000"] }
+teensy4-bsp = { path = "../../teensy4-rs", features = ["rt"] }
+teensy4-panic = { path = "../../teensy4-rs/teensy4-panic" }
+cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
+rtic = { version = "2", features = ["thumbv7-backend"] }
+embedded-hal = "1.0"
+imxrt-ral = { path = "../../imxrt-ral", features = ["imxrt1062"] }
+[[bin]]
+name = "sine_tone"
+path = "src/sine_tone.rs"
+required-features = []
+
+[[bin]]
+name = "line_in_passthrough"
+path = "src/line_in_passthrough.rs"
+required-features = []
+
+[[bin]]
+name = "graph_synth"
+path = "src/graph_synth.rs"
+required-features = []
+
+[profile.release]
+debug = 2
+opt-level = "s"

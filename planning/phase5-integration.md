@@ -102,12 +102,40 @@ The macro generates:
 - Module-level doc on `graph.rs` with full syntax documentation and examples
 - Doc comments on generated macro API (`new()`, `update_all()`)
 
-## 5.3 Examples — **Deferred**
+## 5.3 Examples — **COMPLETE**
 
-Examples require HAL integration (DMA-driven I²S, real hardware) which is out of
-scope for this software-only phase. The README quick-start code and graph macro
-test suite serve as usage examples. Full hardware examples will be added when HAL
-integration is completed.
+Three hardware examples targeting Teensy 4.1 + Audio Shield (SGTL5000) are
+provided in the `examples/` workspace crate. Each is a standalone RTIC firmware
+binary demonstrating a different aspect of the library:
+
+| Example | Description |
+|---------|-------------|
+| `sine_tone` | 440 Hz sine → headphone output. Minimal audio pipeline. |
+| `line_in_passthrough` | Line-in stereo → headphone out. Two DMA channels, shared RTIC resource. |
+| `graph_synth` | Multi-node pipeline (sine → amp → mixer → output) with software tremolo. |
+
+### Key patterns demonstrated
+
+- **SAI1 + DMA setup:** MCLK direction, I2S config, bclk divider, TxFollowRx sync
+- **SGTL5000 codec init:** Using the `teensy-audio` `Sgtl5000` driver with `embedded-hal` 1.0 traits
+- **`AsmDelay` wrapper:** `cortex_m::asm::delay` implementing `DelayNs` (cortex-m 0.7 only provides EH 0.2 delays)
+- **Double-buffered DMA ISR:** `output.isr()` triggers graph updates; blocks interleaved into DMA buffer
+- **Manual node wiring:** Allocate output blocks, call `update()`, convert to `AudioBlockRef` for routing
+- **RTIC shared resources:** Line-in passthrough shares `AudioInputI2S` between RX and TX DMA ISRs
+- **Mono-to-stereo fan-out:** `AudioBlockRef::clone()` for zero-copy dual-channel output
+
+### Build
+
+```bash
+cargo check -p teensy-audio-examples --target thumbv7em-none-eabihf
+```
+
+### Note on the `audio_graph!` macro
+
+The declarative `audio_graph!` macro with `update_all()` is ideal for pure-DSP
+chains terminating in analyzer nodes (e.g. `AudioAnalyzePeak`). For chains that
+terminate in I/O nodes like `AudioOutputI2S` — which require `new(bool)` and ISR
+integration — manual node wiring is demonstrated instead.
 
 ## 5.4 CI setup — **COMPLETE**
 

@@ -1,3 +1,7 @@
 [workspace]
-members = ["teensy-audio"]
+members = ["teensy-audio", "examples"]
 resolver = "2"
+
+[patch.crates-io]
+imxrt-ral = { path = "../imxrt-ral" }
+imxrt-iomuxc = { git = "https://github.com/imxrt-rs/imxrt-iomuxc" }

@@ -134,9 +134,24 @@ cargo check --target thumbv7em-none-eabihf -p teensy-audio
 | Sample format | `i16` (signed 16-bit) |
 | Block pool | 32 blocks |
 
+## Hardware examples
+
+The `examples/` crate contains three RTIC firmware binaries for **Teensy 4.1 + Audio Shield** (SGTL5000):
+
+| Example | Description |
+|---------|-------------|
+| `sine_tone` | 440 Hz sine wave → headphone output |
+| `line_in_passthrough` | Line-in stereo → headphones (two DMA channels, shared RTIC resource) |
+| `graph_synth` | Sine → amplifier → mixer → output with software tremolo envelope |
+
+```sh
+# Cross-compile the examples (requires teensy4-rs + imxrt-hal/ral repos as siblings)
+cargo check -p teensy-audio-examples --target thumbv7em-none-eabihf
+```
+
 ## Roadmap
 
-- [ ] HAL integration (DMA-driven I²S on i.MX RT1062)
+- [x] HAL integration examples (DMA-driven I²S on i.MX RT1062)
 - [ ] Additional waveforms (square, sawtooth, triangle, noise)
 - [ ] FIR / biquad filters
 - [ ] FFT analysis nodes
