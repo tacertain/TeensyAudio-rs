@@ -1,4 +1,4 @@
-mod pool;
+pub(crate) mod pool;
 mod ref_types;
 
 pub use pool::{AudioBlockData, AudioBlockPool};

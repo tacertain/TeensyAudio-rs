@@ -9,6 +9,7 @@ use super::pool::POOL;
 /// There is exactly one `AudioBlockMut` per allocated slot.
 /// Provides `DerefMut` access to the underlying `[i16; 128]` samples.
 /// Dropping an `AudioBlockMut` decrements the refcount (and frees the slot if it reaches zero).
+#[derive(Debug)]
 pub struct AudioBlockMut {
     slot: u8,
 }
@@ -70,6 +71,7 @@ impl Drop for AudioBlockMut {
 /// Multiple `AudioBlockRef`s can point to the same slot. Cloning increments the
 /// refcount; dropping decrements it. When the last reference is dropped, the
 /// pool slot is freed.
+#[derive(Debug)]
 pub struct AudioBlockRef {
     slot: u8,
 }

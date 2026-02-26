@@ -10,14 +10,37 @@ The C++ library has ~84 `AudioStream` subclasses across ~170 source files. This 
 
 ## Phase Summary
 
-| Phase | Title | Document |
-|-------|-------|----------|
-| 0 | Fork & Extend teensy4-rs (HAL Prerequisites) | [phase0-hal-prerequisites.md](phase0-hal-prerequisites.md) |
-| 1 | Core Audio Framework (`teensy-audio` crate) | [phase1-core-framework.md](phase1-core-framework.md) |
-| 2 | I/O Drivers | [phase2-io-drivers.md](phase2-io-drivers.md) |
-| 3 | SGTL5000 Codec Driver | [phase3-sgtl5000-driver.md](phase3-sgtl5000-driver.md) |
-| 4 | DSP Nodes (Initial Set) | [phase4-dsp-nodes.md](phase4-dsp-nodes.md) |
-| 5 | Integration & Polish | [phase5-integration.md](phase5-integration.md) |
+| Phase | Title | Status | Document |
+|-------|-------|--------|----------|
+| 0 | Fork & Extend teensy4-rs (HAL Prerequisites) | **Complete** | [phase0-hal-prerequisites.md](phase0-hal-prerequisites.md) |
+| 1 | Core Audio Framework (`teensy-audio` crate) | **Complete** | [phase1-core-framework.md](phase1-core-framework.md) |
+| 2 | I/O Drivers | **Complete** | [phase2-io-drivers.md](phase2-io-drivers.md) |
+| 3 | SGTL5000 Codec Driver | Not started | [phase3-sgtl5000-driver.md](phase3-sgtl5000-driver.md) |
+| 4 | DSP Nodes (Initial Set) | Not started | [phase4-dsp-nodes.md](phase4-dsp-nodes.md) |
+| 5 | Integration & Polish | Not started | [phase5-integration.md](phase5-integration.md) |
+
+### What's been built so far
+
+**Phase 0** forked teensy4-rs and added SAI/DMA/PLL4 support in separate repos.
+
+**Phase 1** delivered the `teensy-audio` crate (`no_std`) with:
+- Lock-free audio block pool allocator (atomic bitmap + per-slot refcounts, ISR-safe)
+- `AudioBlockMut` / `AudioBlockRef` smart pointers with clone-on-write
+- `AudioNode` and `AudioControl` traits
+- 17 ARM DSP intrinsic wrappers (`SSAT`, `SMUL*`, `PKH*`, `QADD16`, etc.) with pure-Rust fallbacks
+- Q15 helpers (`block_multiply`, `block_accumulate`)
+- Sine and fader wavetables (257 entries each, from C++ library)
+- 42 unit tests passing; ARM cross-compilation verified
+
+**Phase 2** delivered the `io` module with DMA-driven I2S I/O and user-facing queues:
+- `AudioOutputI2S` — DMA-driven I2S stereo output (2 inputs, 0 outputs) with double-buffered block management, ISR handler with `DmaHalf` enum, and `update_responsibility` signaling
+- `AudioInputI2S` — DMA-driven I2S stereo input (0 inputs, 2 outputs) with working-block allocation and ISR de-interleave
+- `AudioPlayQueue` — user-to-graph SPSC queue (0 inputs, 1 output) for injecting audio from user code
+- `AudioRecordQueue` — graph-to-user SPSC queue (1 input, 0 outputs) with start/stop recording
+- `SpscQueue<T, N>` — custom lock-free SPSC ring buffer (atomic indices, const-constructible, ISR-safe)
+- `interleave` utilities — `interleave_lr`, `interleave_l`, `interleave_r`, `deinterleave`, `silence`
+- Hardware-agnostic ISR design: `isr()` accepts `&mut [u32; 128]` + `DmaHalf`, decoupled from HAL types for RTIC flexibility
+- 46 new unit tests (88 total); all passing
 
 ## Key Design Decisions
 

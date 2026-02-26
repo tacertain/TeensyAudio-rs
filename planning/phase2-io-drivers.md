@@ -1,6 +1,30 @@
 # Phase 2: I/O Drivers
 
+**Status: Complete**
+
 This phase implements DMA-driven I2S input/output and user-facing queue buffers. These are the bridge between the audio processing graph and the SAI hardware.
+
+## Implementation Summary
+
+| Component | File | Tests | Description |
+|-----------|------|-------|-------------|
+| `SpscQueue<T, N>` | `io/spsc.rs` | 7 | Lock-free SPSC ring buffer using atomic indices; const-constructible, ISR-safe |
+| Interleave utilities | `io/interleave.rs` | 8 | `interleave_lr`, `interleave_l`, `interleave_r`, `deinterleave`, `silence` |
+| `AudioOutputI2S` | `io/output_i2s.rs` | 10 | DMA-driven I2S stereo output with double-buffered block management |
+| `AudioInputI2S` | `io/input_i2s.rs` | 8 | DMA-driven I2S stereo input with working-block allocation |
+| `AudioPlayQueue` | `io/play_queue.rs` | 5 | User → graph queue via SPSC buffer |
+| `AudioRecordQueue` | `io/record_queue.rs` | 8 | Graph → user queue with start/stop recording |
+| Module root | `io/mod.rs` | — | Re-exports all public types |
+
+**Total: 46 new tests (88 cumulative)**
+
+### Key design decisions made during implementation
+
+- **Custom SPSC instead of `heapless`**: Built a zero-dependency `SpscQueue<T, N>` with const generics to avoid adding `heapless` as a dependency. Uses Lamport queue algorithm (one sentinel slot) with atomic load/store ordering.
+- **Hardware-agnostic ISR API**: The `isr()` methods on `AudioOutputI2S` and `AudioInputI2S` accept `&mut [u32; 128]` + `DmaHalf` enum rather than HAL-specific DMA channel types. This decouples the audio logic from hardware setup and lets the RTIC ISR handler own the DMA buffer and determine which half completed.
+- **`DmaHalf` enum**: Shared between input and output drivers — the ISR determines which half the DMA is operating on and passes it in.
+- **`AudioBlockMut` over `AudioBlockRef` in queues**: `AudioPlayQueue` stores `AudioBlockMut` (exclusive ownership in the queue), while `AudioRecordQueue` stores `AudioBlockRef` (shared, since the graph may still reference the block).
+- **`Debug` derives added**: `AudioBlockMut` and `AudioBlockRef` now derive `Debug` to support `.unwrap()` on `Result<(), T>` in user code.
 
 ## 2.1 `AudioOutputI2S` — DMA-driven I2S output
 
@@ -104,6 +128,19 @@ Allows user code to read audio blocks captured by the processing graph.
 - `NUM_OUTPUTS = 0`
 
 ## Verification
+
+### Unit tests (complete)
+
+All 46 Phase 2 tests pass (`cargo test -- --test-threads=1`):
+
+- `io::spsc` — push/pop, wraparound, full queue rejection, FIFO ordering, drop cleanup
+- `io::interleave` — LR/L-only/R-only interleave, deinterleave, roundtrip, extreme values, silence
+- `io::output_i2s` — silence on empty, interleave both/left-only channels, block rotation after consumption, update responsibility signaling, ramp data verification
+- `io::input_i2s` — working block allocation, ISR fill, de-interleaved output, cycle rotation, pool exhaustion handling
+- `io::play_queue` — enqueue/dequeue, FIFO ordering, full queue rejection
+- `io::record_queue` — start/stop, record/discard behavior, FIFO ordering, full queue silent drop, read-after-stop
+
+### Hardware integration test (deferred to Phase 5)
 
 RTIC example that:
 1. Initializes SAI1 with DMA (using Phase 0 HAL extensions)
