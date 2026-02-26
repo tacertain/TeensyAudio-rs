@@ -1,141 +1,108 @@
-# Phase 5: Integration & Polish
+# Phase 5: Integration & Polish — **COMPLETE**
 
 This phase ties everything together with the `audio_graph!` macro, documentation, examples, and CI.
 
-## 5.1 `audio_graph!` macro
+## Status
 
-A declarative macro that generates a typed audio graph struct with automatic `update_all()` wiring.
+All deliverables implemented. The macro uses an inline input-declaration syntax
+(different from the originally planned separate `connections` block) which avoids
+the `macro_rules!` ident-comparison limitation while remaining ergonomic.
 
-### Syntax
+## 5.1 `audio_graph!` macro — **COMPLETE**
+
+A declarative `macro_rules!` macro that generates a typed audio graph struct with
+automatic `update_all()` wiring.
+
+### Final syntax (implemented)
 
 ```rust
+use teensy_audio::audio_graph;
+use teensy_audio::nodes::*;
+
 audio_graph! {
-    sine: AudioSynthSine,
-    env: AudioEffectEnvelope,
-    mixer: AudioMixer<4>,
-    peak: AudioAnalyzePeak,
-    out: AudioOutputI2S,
-    connections: [
-        (sine, 0) -> (env, 0),
-        (env, 0) -> (mixer, 0),
-        (mixer, 0) -> (out, 0),   // left
-        (mixer, 0) -> (out, 1),   // right
-        (mixer, 0) -> (peak, 0),  // tap for analysis
-    ]
+    pub struct MyGraph {
+        sine:  AudioSynthSine       {},
+        env:   AudioEffectEnvelope  { (sine, 0) },
+        mixer: AudioMixer<4>        { (env, 0), _, _, _ },
+        peak:  AudioAnalyzePeak     { (mixer, 0) },
+        out:   AudioOutputI2S       { (mixer, 0), (mixer, 0) },
+    }
 }
 ```
+
+Each node's inputs are declared **inline** using `{ ... }`:
+- `{}` — no inputs (source node)
+- `{ (node, port) }` — input 0 connected to `node`'s output `port`
+- `{ _ }` — unconnected input (receives `None` / silence)
+- `{ (a, 0), (b, 0) }` — multiple inputs from different sources
+- `{ (mixer, 0), (mixer, 0) }` — fan-out: same output to two inputs
+
+### Design note
+
+The originally planned `connections: [ (src, p) -> (dst, p) ]` syntax required
+matching identifiers inside `macro_rules!`, which Rust macros cannot do. The
+inline syntax sidesteps this entirely — each node declares its own inputs, so no
+ident comparison is needed. The compile-time validation (correct input count) is
+achieved via array type annotation against `NUM_INPUTS`.
 
 ### Generated code
 
 The macro generates:
+1. **A struct** with `pub` fields for each node
+2. **`new()`** — constructs all nodes via `<Type>::new()`
+3. **`update_all()`** — processes nodes in declaration order:
+   - Builds each node's input array from connection specs
+   - Allocates output `AudioBlockMut` blocks from the pool
+   - Calls `node.update(inputs, outputs)`
+   - Converts outputs to `AudioBlockRef` for downstream routing
+   - Fan-out handled via `AudioBlockRef::clone()`
 
-1. **A struct** with all nodes as named fields:
-   ```rust
-   struct AudioGraph {
-       pub sine: AudioSynthSine,
-       pub env: AudioEffectEnvelope,
-       pub mixer: AudioMixer<4>,
-       pub peak: AudioAnalyzePeak,
-       pub out: AudioOutputI2S,
-   }
-   ```
+### Tests (8 new)
+- Graph creation and field access
+- Source → analyzer routing
+- Multi-node chain with fan-out (peak + RMS from same amplifier)
+- Mixer with multiple inputs and unconnected slots
+- Envelope modulation chain
+- DC source level accuracy
+- Silent source (zero amplitude, no spurious output)
+- Multiple update cycles (pool recycling, no leaks)
 
-2. **An `update_all()` method** that calls nodes in topological order and passes blocks between connected ports:
-   ```rust
-   impl AudioGraph {
-       pub fn update_all(&mut self) {
-           // 1. Sources first (no inputs)
-           let mut sine_out = [None; 1];
-           self.sine.update(&[], &mut sine_out);
+## 5.2 Documentation — **COMPLETE**
 
-           // 2. Then nodes that depend on sources
-           let env_in = [sine_out[0].take().map(|b| b.as_shared())];
-           let mut env_out = [None; 1];
-           self.env.update(&env_in, &mut env_out);
-
-           // 3. Continue in topological order...
-           let mixer_in = [env_out[0].take().map(|b| b.as_shared()), None, None, None];
-           let mut mixer_out = [None; 1];
-           self.mixer.update(&mixer_in, &mut mixer_out);
-
-           // 4. Fan-out: clone shared ref for multiple consumers
-           let mixer_shared = mixer_out[0].take().map(|b| b.as_shared());
-           let out_in = [mixer_shared.clone(), mixer_shared.clone()];
-           self.out.update(&out_in, &mut []);
-
-           let peak_in = [mixer_shared];
-           self.peak.update(&peak_in, &mut []);
-       }
-   }
-   ```
-
-3. **Compile-time validation**:
-   - Output index < `NUM_OUTPUTS` for source node
-   - Input index < `NUM_INPUTS` for destination node
-   - No cycles in the connection graph
-   - Warning/error if an input is unconnected (receives `None`)
-
-### Implementation approach
-- Use `macro_rules!` for the initial version
-- The topological sort can be done by ordering nodes: sources first (NUM_INPUTS=0), then nodes whose inputs are all defined, etc.
-- Fan-out (one output → multiple inputs) handled via `AudioBlockRef::clone()`
-
-## 5.2 Documentation
-
-### README.md
+### README.md — **COMPLETE**
 - Project overview and motivation
-- Architecture diagram (block system, node trait, graph macro)
-- Getting started guide:
-  1. Hardware requirements (Teensy 4.1 + Audio Shield)
-  2. Toolchain setup (`thumbv7em-none-eabihf`, `cargo-objcopy`)
-  3. First example walkthrough
-- API overview with links to docs.rs
+- ASCII architecture diagram (block system → traits → nodes → graph macro)
+- Quick start guide with `audio_graph!` macro example
+- Module summary table
+- Available nodes table (8 nodes across 4 categories)
+- Cargo features table
+- Build/test commands (`cargo test`, `cargo check --target thumbv7em-none-eabihf`)
+- Audio parameters table
+- Roadmap section for future work
 
-### Rustdoc
-- Module-level docs on `teensy-audio` crate root
-- Doc comments on all public types and methods
-- Examples in doc comments for key APIs (`AudioNode`, `AudioBlock`, `AudioMixer`, etc.)
+### Rustdoc — **COMPLETE**
+- Crate-level doc comment on `lib.rs` with module table, quick-start example,
+  feature/parameter reference
+- Module-level doc on `graph.rs` with full syntax documentation and examples
+- Doc comments on generated macro API (`new()`, `update_all()`)
 
-## 5.3 Examples
+## 5.3 Examples — **Deferred**
 
-### Example 1: Sine tone playback
-Simplest possible example — generate a tone and play it.
-```
-AudioSynthSine → AudioOutputI2S (both channels)
-+ SGTL5000 enable + volume
-```
+Examples require HAL integration (DMA-driven I²S, real hardware) which is out of
+scope for this software-only phase. The README quick-start code and graph macro
+test suite serve as usage examples. Full hardware examples will be added when HAL
+integration is completed.
 
-### Example 2: Line-in passthrough
-Audio passthrough from line-in to headphones with volume control.
-```
-AudioInputI2S → AudioOutputI2S
-+ SGTL5000 with input_select(LINEIN), volume control
-```
+## 5.4 CI setup — **COMPLETE**
 
-### Example 3: Synthesizer with envelope
-Button-triggered tone with ADSR envelope and mixing.
-```
-AudioSynthSine → AudioEffectEnvelope → AudioMixer<4> → AudioOutputI2S
-+ peak analyzer logging to USB serial
-```
-
-### Example 4: Audio graph macro demo
-Same as Example 3 but using the `audio_graph!` macro for wiring.
-
-## 5.4 CI setup
-
-### GitHub Actions workflow
-- **Target**: `thumbv7em-none-eabihf`
-- **Steps**:
-  1. Install Rust toolchain + target
-  2. `cargo check` — compile check
-  3. `cargo clippy -- -D warnings` — lint
-  4. `cargo fmt --check` — formatting
-  5. `cargo doc --no-deps` — documentation generation
-  6. `cargo test --target x86_64-*` — run host-side unit tests (block allocator, DSP math)
-
-### Dependency caching
-- Cache `~/.cargo/registry` and `target/` directories
+### GitHub Actions workflow (`.github/workflows/ci.yml`)
+- **rustfmt** — `cargo fmt -p teensy-audio -- --check`
+- **clippy** — `cargo clippy -p teensy-audio --target thumbv7em-none-eabihf -- -D warnings`
+- **test** — `cargo test --lib -p teensy-audio -- --test-threads=1`
+- **build** — `cargo check -p teensy-audio --target thumbv7em-none-eabihf`
+- **rustdoc** — `cargo doc -p teensy-audio --no-deps` with `-D warnings`
+- Triggers on push/PR to `main` branch
+- Uses `dtolnay/rust-toolchain@stable`
 
 ## 5.5 Future expansion notes
 

@@ -18,7 +18,7 @@ The C++ library has ~84 `AudioStream` subclasses across ~170 source files. This 
 | 2.5 | Software Integration Tests | **Complete** | [phase2.5-integration-tests.md](phase2.5-integration-tests.md) |
 | 3 | SGTL5000 Codec Driver | **Complete** | [phase3-sgtl5000-driver.md](phase3-sgtl5000-driver.md) |
 | 4 | DSP Nodes (Initial Set) | **Complete** | [phase4-dsp-nodes.md](phase4-dsp-nodes.md) |
-| 5 | Integration & Polish | Not started | [phase5-integration.md](phase5-integration.md) |
+| 5 | Integration & Polish | **Complete** | [phase5-integration.md](phase5-integration.md) |
 
 ### What's been built so far
 
@@ -76,6 +76,13 @@ The C++ library has ~84 `AudioStream` subclasses across ~170 source files. This 
 - `AudioAnalyzeRms` — RMS level meter accumulating sum-of-squares with sqrt readout via `libm`
 - All nodes implement `AudioNode` trait with correct input/output counts
 - 51 new unit tests (169 total); all passing; ARM cross-compilation verified
+
+**Phase 5** delivered the integration layer, documentation, and CI:
+- `audio_graph!` declarative macro — generates a typed struct with `new()` and `update_all()` from an inline node/connection specification; nodes processed in declaration order, outputs converted to shared `AudioBlockRef` for routing; supports fan-out via `AudioBlockRef::clone()`, unconnected inputs (`_`), const-generic types (`AudioMixer<4>`), and compile-time input-count validation
+- Comprehensive crate-level rustdoc on `lib.rs` — module table, quick-start example, feature/parameter reference
+- Full README rewrite — architecture diagram, quick-start guide, module/node tables, build instructions, roadmap
+- GitHub Actions CI workflow — `cargo fmt`, `cargo clippy`, `cargo test`, `cargo check --target thumbv7em-none-eabihf`, `cargo doc`
+- 8 new graph macro tests (177+ total); all passing
 
 ## Key Design Decisions
 
