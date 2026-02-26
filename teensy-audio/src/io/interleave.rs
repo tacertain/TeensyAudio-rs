@@ -5,73 +5,83 @@
 //!
 //! ## DMA Buffer Format
 //!
-//! Each `u32` in the DMA buffer contains one stereo frame:
-//! - Lower 16 bits (bits 0–15): left channel sample (`i16`)
-//! - Upper 16 bits (bits 16–31): right channel sample (`i16`)
+//! The SAI operates in 32-bit word mode with 2 channels per frame. Each
+//! stereo frame occupies **two** `u32` words in the DMA buffer:
 //!
-//! On little-endian ARM, this corresponds to `[left, right]` as consecutive
-//! `i16` values in memory, matching the SAI I2S frame format.
+//! ```text
+//!   dest[i*2]     = left  sample, MSB-aligned (bits 31–16)
+//!   dest[i*2 + 1] = right sample, MSB-aligned (bits 31–16)
+//! ```
+//!
+//! 16-bit audio samples are placed in the upper half of each 32-bit I2S
+//! word (`<< 16`). The lower 16 bits are zero. This matches the SGTL5000
+//! codec in I2S mode with 32-bit BCLK slots (SCLKFREQ=0, 64×Fs).
+//!
+//! A buffer of `N` mono samples produces `N * 2` u32 words.
 
-/// Interleave left and right channel samples into packed stereo `u32` format.
+/// Interleave left and right channel samples into I2S stereo DMA format.
 ///
-/// Each output `u32` packs: `(right << 16) | (left & 0xFFFF)`.
+/// Each frame becomes two `u32` words: left (MSB-aligned), then right (MSB-aligned).
 ///
 /// # Panics
 ///
-/// Debug-asserts that all slices have the same length.
+/// Debug-asserts that `dest.len() == left.len() * 2` and `left.len() == right.len()`.
 pub fn interleave_lr(dest: &mut [u32], left: &[i16], right: &[i16]) {
-    debug_assert_eq!(dest.len(), left.len());
-    debug_assert_eq!(dest.len(), right.len());
+    debug_assert_eq!(dest.len(), left.len() * 2);
+    debug_assert_eq!(left.len(), right.len());
 
-    for i in 0..dest.len() {
-        dest[i] = (left[i] as u16 as u32) | ((right[i] as u16 as u32) << 16);
+    for i in 0..left.len() {
+        dest[i * 2] = (left[i] as u16 as u32) << 16;
+        dest[i * 2 + 1] = (right[i] as u16 as u32) << 16;
     }
 }
 
-/// Interleave left channel only into packed stereo `u32` format.
+/// Interleave left channel only into I2S stereo DMA format.
 ///
 /// The right channel is set to zero (silence).
 ///
 /// # Panics
 ///
-/// Debug-asserts that both slices have the same length.
+/// Debug-asserts that `dest.len() == left.len() * 2`.
 pub fn interleave_l(dest: &mut [u32], left: &[i16]) {
-    debug_assert_eq!(dest.len(), left.len());
+    debug_assert_eq!(dest.len(), left.len() * 2);
 
-    for i in 0..dest.len() {
-        dest[i] = left[i] as u16 as u32;
+    for i in 0..left.len() {
+        dest[i * 2] = (left[i] as u16 as u32) << 16;
+        dest[i * 2 + 1] = 0;
     }
 }
 
-/// Interleave right channel only into packed stereo `u32` format.
+/// Interleave right channel only into I2S stereo DMA format.
 ///
 /// The left channel is set to zero (silence).
 ///
 /// # Panics
 ///
-/// Debug-asserts that both slices have the same length.
+/// Debug-asserts that `dest.len() == right.len() * 2`.
 pub fn interleave_r(dest: &mut [u32], right: &[i16]) {
-    debug_assert_eq!(dest.len(), right.len());
+    debug_assert_eq!(dest.len(), right.len() * 2);
 
-    for i in 0..dest.len() {
-        dest[i] = (right[i] as u16 as u32) << 16;
+    for i in 0..right.len() {
+        dest[i * 2] = 0;
+        dest[i * 2 + 1] = (right[i] as u16 as u32) << 16;
     }
 }
 
-/// Deinterleave packed stereo `u32` buffer into separate left and right channels.
+/// Deinterleave I2S stereo DMA buffer into separate left and right channels.
 ///
-/// Extracts left (lower 16 bits) and right (upper 16 bits) from each `u32`.
+/// Reads the upper 16 bits of each `u32` word (MSB-aligned samples).
 ///
 /// # Panics
 ///
-/// Debug-asserts that all slices have the same length.
+/// Debug-asserts that `src.len() == left.len() * 2` and `left.len() == right.len()`.
 pub fn deinterleave(src: &[u32], left: &mut [i16], right: &mut [i16]) {
-    debug_assert_eq!(src.len(), left.len());
-    debug_assert_eq!(src.len(), right.len());
+    debug_assert_eq!(src.len(), left.len() * 2);
+    debug_assert_eq!(left.len(), right.len());
 
-    for i in 0..src.len() {
-        left[i] = src[i] as i16;
-        right[i] = (src[i] >> 16) as i16;
+    for i in 0..left.len() {
+        left[i] = (src[i * 2] >> 16) as i16;
+        right[i] = (src[i * 2 + 1] >> 16) as i16;
     }
 }
 
@@ -88,48 +98,61 @@ mod tests {
     fn interleave_lr_basic() {
         let left = [100i16, -200, 300, -400];
         let right = [500i16, -600, 700, -800];
-        let mut dest = [0u32; 4];
+        let mut dest = [0u32; 8]; // 4 frames × 2 words
 
         interleave_lr(&mut dest, &left, &right);
 
         for i in 0..4 {
-            assert_eq!(dest[i] as i16, left[i], "left mismatch at index {i}");
-            assert_eq!((dest[i] >> 16) as i16, right[i], "right mismatch at index {i}");
+            assert_eq!(
+                (dest[i * 2] >> 16) as i16,
+                left[i],
+                "left mismatch at frame {i}"
+            );
+            assert_eq!(
+                (dest[i * 2 + 1] >> 16) as i16,
+                right[i],
+                "right mismatch at frame {i}"
+            );
+            // Lower 16 bits should be zero
+            assert_eq!(dest[i * 2] & 0xFFFF, 0, "left low bits at frame {i}");
+            assert_eq!(dest[i * 2 + 1] & 0xFFFF, 0, "right low bits at frame {i}");
         }
     }
 
     #[test]
     fn interleave_l_zeroes_right() {
         let left = [1000i16, -2000];
-        let mut dest = [0xFFFF_FFFFu32; 2];
+        let mut dest = [0xFFFF_FFFFu32; 4]; // 2 frames × 2 words
 
         interleave_l(&mut dest, &left);
 
-        assert_eq!(dest[0] as i16, 1000);
-        assert_eq!((dest[0] >> 16) as i16, 0);
-        assert_eq!(dest[1] as i16, -2000);
-        assert_eq!((dest[1] >> 16) as i16, 0);
+        assert_eq!((dest[0] >> 16) as i16, 1000);
+        assert_eq!(dest[1], 0); // right = silence
+        assert_eq!((dest[2] >> 16) as i16, -2000);
+        assert_eq!(dest[3], 0); // right = silence
     }
 
     #[test]
     fn interleave_r_zeroes_left() {
         let right = [3000i16, -4000];
-        let mut dest = [0xFFFF_FFFFu32; 2];
+        let mut dest = [0xFFFF_FFFFu32; 4]; // 2 frames × 2 words
 
         interleave_r(&mut dest, &right);
 
-        assert_eq!(dest[0] as i16, 0);
-        assert_eq!((dest[0] >> 16) as i16, 3000);
-        assert_eq!(dest[1] as i16, 0);
-        assert_eq!((dest[1] >> 16) as i16, -4000);
+        assert_eq!(dest[0], 0); // left = silence
+        assert_eq!((dest[1] >> 16) as i16, 3000);
+        assert_eq!(dest[2], 0); // left = silence
+        assert_eq!((dest[3] >> 16) as i16, -4000);
     }
 
     #[test]
     fn deinterleave_basic() {
-        // Pack known values: left=100, right=500; left=-200, right=-600
+        // Pack known values in the new format: 2 words per frame, MSB-aligned
         let src = [
-            (100u16 as u32) | ((500u16 as u32) << 16),
-            ((-200i16 as u16) as u32) | (((-600i16 as u16) as u32) << 16),
+            (100u16 as u32) << 16,  // left[0]
+            (500u16 as u32) << 16,  // right[0]
+            ((-200i16 as u16) as u32) << 16, // left[1]
+            ((-600i16 as u16) as u32) << 16, // right[1]
         ];
         let mut left = [0i16; 2];
         let mut right = [0i16; 2];
@@ -144,7 +167,7 @@ mod tests {
     fn roundtrip_preserves_data() {
         let orig_left = [i16::MIN, -1, 0, 1, i16::MAX, 12345, -12345, 0];
         let orig_right = [0, i16::MAX, i16::MIN, 42, -42, 100, -100, 0];
-        let mut packed = [0u32; 8];
+        let mut packed = [0u32; 16]; // 8 frames × 2 words
 
         interleave_lr(&mut packed, &orig_left, &orig_right);
 
@@ -179,7 +202,7 @@ mod tests {
     fn extreme_values() {
         let left = [i16::MIN, i16::MAX];
         let right = [i16::MAX, i16::MIN];
-        let mut packed = [0u32; 2];
+        let mut packed = [0u32; 4]; // 2 frames × 2 words
 
         interleave_lr(&mut packed, &left, &right);
 

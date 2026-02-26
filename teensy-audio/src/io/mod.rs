@@ -19,11 +19,10 @@
 //!
 //! ## DMA Buffer Layout
 //!
-//! The I2S drivers use circular DMA buffers of `[u32; 128]`:
-//! - Each `u32` = one stereo frame (left in lower 16 bits, right in upper 16)
-//! - Buffer is split into two halves (64 frames each)
-//! - DMA fires half-complete and complete interrupts
-//! - ISR fills/reads the inactive half while DMA operates on the active half
+//! The I2S drivers use one-shot DMA buffers of `[u32; AUDIO_BLOCK_SAMPLES * 2]`:
+//! - Each stereo frame occupies 2 `u32` words: `[left_msb_aligned, right_msb_aligned]`
+//! - 16-bit samples are placed in the upper 16 bits of each 32-bit word (`<< 16`)
+//! - DMA runs in one-shot mode: ISR fills the buffer and re-arms DMA
 
 pub mod interleave;
 pub mod spsc;
@@ -32,7 +31,7 @@ pub mod input_i2s;
 pub mod play_queue;
 pub mod record_queue;
 
-pub use output_i2s::{AudioOutputI2S, DmaHalf};
+pub use output_i2s::AudioOutputI2S;
 pub use input_i2s::AudioInputI2S;
 pub use play_queue::AudioPlayQueue;
 pub use record_queue::AudioRecordQueue;

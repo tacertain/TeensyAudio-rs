@@ -14,7 +14,7 @@ mod tests {
     use crate::block::{AudioBlockMut, AudioBlockRef};
     use crate::constants::AUDIO_BLOCK_SAMPLES;
     use crate::io::input_i2s::AudioInputI2S;
-    use crate::io::output_i2s::{AudioOutputI2S, DmaHalf};
+    use crate::io::output_i2s::AudioOutputI2S;
     use crate::io::play_queue::AudioPlayQueue;
     use crate::io::record_queue::AudioRecordQueue;
     use crate::node::AudioNode;
@@ -34,17 +34,15 @@ mod tests {
 
     /// Run one full block cycle through OutputI2S:
     /// 1. Call update() to queue the left/right blocks
-    /// 2. Call isr() twice (two halves) to interleave into DMA buffer
+    /// 2. Call isr() to interleave into DMA buffer
     fn output_cycle(
         output: &mut AudioOutputI2S,
         left: Option<AudioBlockRef>,
         right: Option<AudioBlockRef>,
-        dma_tx: &mut [u32; AUDIO_BLOCK_SAMPLES],
+        dma_tx: &mut [u32; AUDIO_BLOCK_SAMPLES * 2],
     ) -> bool {
         output.update(&[left, right], &mut []);
-        let s1 = output.isr(dma_tx, DmaHalf::First);
-        let s2 = output.isr(dma_tx, DmaHalf::Second);
-        s1 || s2
+        output.isr(dma_tx)
     }
 
     // ---------------------------------------------------------------
@@ -87,7 +85,7 @@ mod tests {
         let right_ref = pq_out_right[0].take().unwrap().into_shared();
 
         // Step 3: Feed into OutputI2S
-        let mut dma_tx = [0u32; AUDIO_BLOCK_SAMPLES];
+        let mut dma_tx = [0u32; AUDIO_BLOCK_SAMPLES * 2];
         output_cycle(&mut output, Some(left_ref), Some(right_ref), &mut dma_tx);
 
         // Step 4: Simulated loopback — TX buffer becomes RX buffer
@@ -96,9 +94,8 @@ mod tests {
         // Step 5: InputI2S needs working blocks allocated first
         let mut warmup_out = [None, None];
         input.update(&[], &mut warmup_out);
-        // Now run the ISR cycle with the loopback data
-        input.isr(&dma_rx, DmaHalf::First);
-        input.isr(&dma_rx, DmaHalf::Second);
+        // Now run the ISR with the loopback data
+        input.isr(&dma_rx);
 
         // Step 6: InputI2S produces de-interleaved blocks
         let mut in_out = [None, None];
@@ -157,8 +154,8 @@ mod tests {
             play_queue.update(&[], &mut pq_out);
             let block_ref = pq_out[0].take().unwrap().into_shared();
 
-            // Output cycle: update + 2 ISR calls
-            let mut dma_buf = [0u32; AUDIO_BLOCK_SAMPLES];
+            // Output cycle: update + ISR
+            let mut dma_buf = [0u32; AUDIO_BLOCK_SAMPLES * 2];
             output_cycle(
                 &mut output,
                 Some(block_ref.clone()),
@@ -167,8 +164,7 @@ mod tests {
             );
 
             // Loopback
-            input.isr(&dma_buf, DmaHalf::First);
-            input.isr(&dma_buf, DmaHalf::Second);
+            input.isr(&dma_buf);
 
             let mut in_out = [None, None];
             input.update(&[], &mut in_out);
@@ -204,14 +200,13 @@ mod tests {
         let left = make_ramp(500, 1).into_shared();
 
         // Feed left only, no right
-        let mut dma_buf = [0u32; AUDIO_BLOCK_SAMPLES];
+        let mut dma_buf = [0u32; AUDIO_BLOCK_SAMPLES * 2];
         output_cycle(&mut output, Some(left), None, &mut dma_buf);
 
         // InputI2S: allocate working blocks, then deinterleave
         let mut warmup = [None, None];
         input.update(&[], &mut warmup);
-        input.isr(&dma_buf, DmaHalf::First);
-        input.isr(&dma_buf, DmaHalf::Second);
+        input.isr(&dma_buf);
         let mut in_out = [None, None];
         input.update(&[], &mut in_out);
 
@@ -238,13 +233,12 @@ mod tests {
 
         let right = make_ramp(-500, -1).into_shared();
 
-        let mut dma_buf = [0u32; AUDIO_BLOCK_SAMPLES];
+        let mut dma_buf = [0u32; AUDIO_BLOCK_SAMPLES * 2];
         output_cycle(&mut output, None, Some(right), &mut dma_buf);
 
         let mut warmup = [None, None];
         input.update(&[], &mut warmup);
-        input.isr(&dma_buf, DmaHalf::First);
-        input.isr(&dma_buf, DmaHalf::Second);
+        input.isr(&dma_buf);
         let mut in_out = [None, None];
         input.update(&[], &mut in_out);
 
@@ -284,7 +278,7 @@ mod tests {
             play_queue.update(&[], &mut pq_out);
             let block_ref = pq_out[0].take().unwrap().into_shared();
 
-            let mut dma_buf = [0u32; AUDIO_BLOCK_SAMPLES];
+            let mut dma_buf = [0u32; AUDIO_BLOCK_SAMPLES * 2];
             output_cycle(
                 &mut output,
                 Some(block_ref.clone()),
@@ -294,8 +288,7 @@ mod tests {
 
             let mut warmup = [None, None];
             input.update(&[], &mut warmup);
-            input.isr(&dma_buf, DmaHalf::First);
-            input.isr(&dma_buf, DmaHalf::Second);
+            input.isr(&dma_buf);
 
             let mut in_out = [None, None];
             input.update(&[], &mut in_out);
@@ -330,11 +323,10 @@ mod tests {
         reset_pool();
 
         let mut output = AudioOutputI2S::new(true);
-        let mut dma_buf = [0xDEAD_BEEFu32; AUDIO_BLOCK_SAMPLES];
+        let mut dma_buf = [0xDEAD_BEEFu32; AUDIO_BLOCK_SAMPLES * 2];
 
         // No blocks queued — ISR should write silence
-        output.isr(&mut dma_buf, DmaHalf::First);
-        output.isr(&mut dma_buf, DmaHalf::Second);
+        output.isr(&mut dma_buf);
 
         for (i, &sample) in dma_buf.iter().enumerate() {
             assert_eq!(sample, 0, "DMA buffer should be silent at index {i}, got {sample:#X}");
@@ -345,8 +337,7 @@ mod tests {
         let mut warmup = [None, None];
         input.update(&[], &mut warmup);
 
-        input.isr(&dma_buf, DmaHalf::First);
-        input.isr(&dma_buf, DmaHalf::Second);
+        input.isr(&dma_buf);
 
         let mut in_out = [None, None];
         input.update(&[], &mut in_out);

@@ -48,11 +48,13 @@ mod app {
     use teensy_audio::block::{AudioBlockMut, AudioBlockRef};
     use teensy_audio::codec::{Input, Sgtl5000};
     use teensy_audio::io::input_i2s::AudioInputI2S;
-    use teensy_audio::io::output_i2s::{AudioOutputI2S, DmaHalf};
+    use teensy_audio::io::output_i2s::AudioOutputI2S;
     use teensy_audio::node::AudioNode;
 
     const AUDIO_BLOCK_SAMPLES: usize = 128;
-    const DMA_BUF_LEN: usize = AUDIO_BLOCK_SAMPLES;
+    const DMA_BUF_LEN: usize = AUDIO_BLOCK_SAMPLES * 2;
+
+    type SaiRx = hal::sai::Rx<1, 32, 2, hal::sai::PackingNone>;
 
     // ── RTIC resources ───────────────────────────────────────────────
 
@@ -62,6 +64,7 @@ mod app {
         dma_tx: Channel,
         dma_rx: Channel,
         output: AudioOutputI2S,
+        _sai_rx: SaiRx,
     }
 
     #[shared]
@@ -121,12 +124,14 @@ mod app {
             c.mclk_source = hal::sai::MclkSource::Select1;
             c
         };
-        let (Some(mut sai_tx), Some(sai_rx)) =
+        let (Some(mut sai_tx), Some(mut sai_rx)) =
             sai.split::<32, 2, hal::sai::PackingNone>(&sai_config)
         else {
             panic!("SAI split failed");
         };
-        drop(sai_rx); // RX enabled at split; we keep TX handle.
+
+        // Enable RX — clock source in TxFollowRx mode.
+        sai_rx.set_enable(true);
 
         // ── I2C + SGTL5000 codec ────────────────────────────────────
         let i2c = board::lpi2c(
@@ -174,12 +179,6 @@ mod app {
         dma_rx.set_disable_on_completion(true);
         dma_rx.set_interrupt_on_completion(true);
 
-        // Note: SAI RX source signal for DMA.
-        // The exact API depends on the imxrt-hal version. The receiver
-        // handle was dropped above, so if your HAL requires it for
-        // `source_signal()`, you may need to keep the handle.
-        //
-        // For now we use the same channel config pattern as TX.
         unsafe {
             let buf = core::slice::from_raw_parts_mut(
                 core::ptr::addr_of_mut!(DMA_RX_BUF) as *mut u32,
@@ -205,35 +204,27 @@ mod app {
                 dma_tx,
                 dma_rx,
                 output,
+                _sai_rx: sai_rx,
             },
         )
     }
 
     // ── RX DMA ISR: capture incoming audio data ──────────────────────
 
-    #[task(binds = DMA1_DMA17, shared = [input], local = [dma_rx, toggle_rx: u32 = 0], priority = 2)]
+    #[task(binds = DMA1_DMA17, shared = [input], local = [dma_rx, _sai_rx], priority = 2)]
     fn dma_rx_isr(mut cx: dma_rx_isr::Context) {
         let dma_rx = cx.local.dma_rx;
-        let toggle = cx.local.toggle_rx;
 
         while dma_rx.is_interrupt() {
             dma_rx.clear_interrupt();
         }
         dma_rx.clear_complete();
 
-        let half = if *toggle % 2 == 0 {
-            DmaHalf::First
-        } else {
-            DmaHalf::Second
-        };
-
         // De-interleave captured audio into the input node's working blocks.
         let dma_buf = unsafe { &*DMA_RX_BUF.as_ptr() };
         cx.shared.input.lock(|input| {
-            input.isr(dma_buf, half);
+            input.isr(dma_buf);
         });
-
-        *toggle += 1;
 
         // Re-arm RX DMA.
         unsafe {
@@ -249,26 +240,20 @@ mod app {
 
     // ── TX DMA ISR: send audio + drive the graph update ──────────────
 
-    #[task(binds = DMA0_DMA16, shared = [input], local = [led, dma_tx, output, toggle_tx: u32 = 0], priority = 2)]
+    #[task(binds = DMA0_DMA16, shared = [input], local = [led, dma_tx, output, toggle: u32 = 0], priority = 2)]
     fn dma_tx_isr(mut cx: dma_tx_isr::Context) {
         let dma_tx = cx.local.dma_tx;
         let output = cx.local.output;
         let led = cx.local.led;
-        let toggle = cx.local.toggle_tx;
+        let toggle = cx.local.toggle;
 
         while dma_tx.is_interrupt() {
             dma_tx.clear_interrupt();
         }
         dma_tx.clear_complete();
 
-        let half = if *toggle % 2 == 0 {
-            DmaHalf::First
-        } else {
-            DmaHalf::Second
-        };
-
         let dma_buf = unsafe { &mut *DMA_TX_BUF.as_mut_ptr() };
-        let should_update = output.isr(dma_buf, half);
+        let should_update = output.isr(dma_buf);
 
         if should_update {
             // ── Audio passthrough: input → output ───────────────────

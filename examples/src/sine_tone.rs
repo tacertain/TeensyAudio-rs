@@ -50,14 +50,15 @@ mod app {
 
     use teensy_audio::block::{AudioBlockMut, AudioBlockRef};
     use teensy_audio::codec::Sgtl5000;
-    use teensy_audio::io::output_i2s::{AudioOutputI2S, DmaHalf};
+    use teensy_audio::io::output_i2s::AudioOutputI2S;
     use teensy_audio::node::AudioNode;
     use teensy_audio::nodes::AudioSynthSine;
 
     const AUDIO_BLOCK_SAMPLES: usize = 128;
-    const DMA_BUF_LEN: usize = AUDIO_BLOCK_SAMPLES;
+    const DMA_BUF_LEN: usize = AUDIO_BLOCK_SAMPLES * 2;
 
     type SaiTx = hal::sai::Tx<1, 32, 2, hal::sai::PackingNone>;
+    type SaiRx = hal::sai::Rx<1, 32, 2, hal::sai::PackingNone>;
 
     // ── RTIC resources ───────────────────────────────────────────────
 
@@ -66,6 +67,7 @@ mod app {
         led: board::Led,
         dma_chan: Channel,
         sai_tx: SaiTx,
+        _sai_rx: SaiRx,
         output: AudioOutputI2S,
         sine: AudioSynthSine,
     }
@@ -121,13 +123,16 @@ mod app {
             c.mclk_source = hal::sai::MclkSource::Select1;
             c
         };
-        let (Some(mut sai_tx), Some(sai_rx)) =
+        let (Some(mut sai_tx), Some(mut sai_rx)) =
             sai.split::<32, 2, hal::sai::PackingNone>(&sai_config)
         else {
             panic!("SAI split failed");
         };
+
         // Enable RX first — it is the clock source in TxFollowRx mode.
-        drop(sai_rx); // RX is enabled at split; we keep TX handle.
+        // RX must be enabled so BCLK/LRCLK are present on the pins
+        // before the SGTL5000 codec is initialised over I2C.
+        sai_rx.set_enable(true);
 
         // ── I2C + SGTL5000 codec ────────────────────────────────────
         let i2c = board::lpi2c(
@@ -180,6 +185,7 @@ mod app {
                 led,
                 dma_chan,
                 sai_tx,
+                _sai_rx: sai_rx,
                 output,
                 sine,
             },
@@ -188,7 +194,7 @@ mod app {
 
     // ── DMA ISR: interleave audio into DMA buffer ────────────────────
 
-    #[task(binds = DMA0_DMA16, local = [led, dma_chan, sai_tx, output, sine, toggle: u32 = 0], priority = 2)]
+    #[task(binds = DMA0_DMA16, local = [led, dma_chan, sai_tx, _sai_rx, output, sine, toggle: u32 = 0], priority = 2)]
     fn dma_isr(cx: dma_isr::Context) {
         let dma_chan = cx.local.dma_chan;
         let output = cx.local.output;
@@ -202,16 +208,9 @@ mod app {
         }
         dma_chan.clear_complete();
 
-        // Determine which half the DMA completed.
-        let half = if *toggle % 2 == 0 {
-            DmaHalf::First
-        } else {
-            DmaHalf::Second
-        };
-
         // Let the output node interleave queued blocks into the DMA buffer.
         let dma_buf = unsafe { &mut *DMA_TX_BUF.as_mut_ptr() };
-        let should_update = output.isr(dma_buf, half);
+        let should_update = output.isr(dma_buf);
 
         if should_update {
             // ── Audio pipeline: sine → output ───────────────────────
