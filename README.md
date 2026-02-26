@@ -136,7 +136,8 @@ cargo check --target thumbv7em-none-eabihf -p teensy-audio
 
 ## Hardware examples
 
-The `examples/` crate contains three RTIC firmware binaries for **Teensy 4.1 + Audio Shield** (SGTL5000):
+The `examples/` workspace crate contains three RTIC firmware binaries for
+**Teensy 4.1 + Audio Shield** (SGTL5000):
 
 | Example | Description |
 |---------|-------------|
@@ -144,10 +145,108 @@ The `examples/` crate contains three RTIC firmware binaries for **Teensy 4.1 + A
 | `line_in_passthrough` | Line-in stereo → headphones (two DMA channels, shared RTIC resource) |
 | `graph_synth` | Sine → amplifier → mixer → output with software tremolo envelope |
 
-```sh
-# Cross-compile the examples (requires teensy4-rs + imxrt-hal/ral repos as siblings)
-cargo check -p teensy-audio-examples --target thumbv7em-none-eabihf
+### Prerequisites
+
+The examples depend on sibling repositories via relative paths. Your directory
+layout must look like this:
+
 ```
+parent/
+├── TeensyAudio-rs/    ← this repo
+├── teensy4-rs/        ← https://github.com/pjrc-rs/teensy4-rs
+├── imxrt-hal/         ← https://github.com/imxrt-rs/imxrt-hal
+└── imxrt-ral/         ← https://github.com/imxrt-rs/imxrt-ral
+```
+
+You also need the `thumbv7em-none-eabihf` target installed:
+
+```sh
+rustup target add thumbv7em-none-eabihf
+```
+
+### Building
+
+To build all three examples:
+
+```sh
+cargo build -p teensy-audio-examples --target thumbv7em-none-eabihf --release
+```
+
+To build a single example:
+
+```sh
+cargo build -p teensy-audio-examples --bin sine_tone --target thumbv7em-none-eabihf --release
+```
+
+> **Tip:** Use `--release` for size-optimised builds. Debug builds may fail to
+> link due to large text/data regions on the Cortex-M7.
+
+Artifacts are placed in `target/thumbv7em-none-eabihf/release/`.
+
+### Flashing
+
+You will need:
+
+- [`cargo-binutils`](https://github.com/rust-embedded/cargo-binutils) (provides
+  `rust-objcopy`)
+- Either [`teensy_loader_cli`](https://github.com/PaulStoffregen/teensy_loader_cli)
+  or the [Teensy Loader Application](https://www.pjrc.com/teensy/loader.html)
+  (ships with Teensyduino)
+
+Convert the ELF to Intel HEX, then flash:
+
+```sh
+rust-objcopy -O ihex target/thumbv7em-none-eabihf/release/sine_tone sine_tone.hex
+teensy_loader_cli --mcu=TEENSY41 -v -w sine_tone.hex
+```
+
+Repeat for whichever example binary you want to run.
+
+## Known test flakiness
+
+When running `cargo test` **without** `--test-threads=1`, three tests may
+intermittently fail:
+
+- `block::pool::tests::alloc_exhaustion`
+- `graph::verification_tests::tests::verify_dsp_adsr_shapes_tone`
+- `graph::verification_tests::tests::verify_fade_out_decreases_output`
+
+### Root cause
+
+All audio nodes allocate blocks from a **single global static pool**
+(`block::pool::POOL`): a 32-slot bitmap-based allocator using atomics. Many
+tests call `POOL.reset()` at their start to ensure a clean slate. When Rust's
+test harness runs tests in parallel (the default), multiple tests race on this
+shared global:
+
+1. **Test A** calls `POOL.reset()`, clearing the bitmap.
+2. **Test B** is mid-way through allocating blocks — its blocks are now silently
+   freed under it.
+3. **Test A** allocates its expected number of blocks, but Test B's concurrent
+   allocations (or unexpected frees from step 2) leave the pool in a state
+   neither test expected.
+
+This manifests as:
+- `alloc_exhaustion` — the pool appears to have free slots when it shouldn't,
+  because another test reset it.
+- Verification tests — node outputs come back as `None` (pool exhausted by a
+  concurrent test) or have unexpected amplitude (blocks were zeroed mid-use).
+
+### Workaround
+
+Always run tests single-threaded:
+
+```sh
+cargo test --lib -p teensy-audio -- --test-threads=1
+```
+
+This is **not a bug in the pool allocator itself** — the atomic bitmap is
+correct for single-core `no_std` use (ISR + main thread). The flakiness is
+purely a test-harness artifact: the global pool was designed for a single
+firmware application, not for dozens of independent tests sharing a process.
+
+On real hardware only one firmware image runs at a time, so the pool is never
+contested this way.
 
 ## Roadmap
 
