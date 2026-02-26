@@ -17,7 +17,7 @@ The C++ library has ~84 `AudioStream` subclasses across ~170 source files. This 
 | 2 | I/O Drivers | **Complete** | [phase2-io-drivers.md](phase2-io-drivers.md) |
 | 2.5 | Software Integration Tests | **Complete** | [phase2.5-integration-tests.md](phase2.5-integration-tests.md) |
 | 3 | SGTL5000 Codec Driver | **Complete** | [phase3-sgtl5000-driver.md](phase3-sgtl5000-driver.md) |
-| 4 | DSP Nodes (Initial Set) | Not started | [phase4-dsp-nodes.md](phase4-dsp-nodes.md) |
+| 4 | DSP Nodes (Initial Set) | **Complete** | [phase4-dsp-nodes.md](phase4-dsp-nodes.md) |
 | 5 | Integration & Polish | Not started | [phase5-integration.md](phase5-integration.md) |
 
 ### What's been built so far
@@ -64,6 +64,18 @@ The C++ library has ~84 `AudioStream` subclasses across ~170 source files. This 
 - `AudioControl` trait implementation for codec-generic code
 - Mock I2C + delay test harness for host-side verification
 - 24 unit tests (118 total); all passing
+
+**Phase 4** delivered the `nodes` module with 8 DSP audio processing nodes:
+- `AudioMixer<N>` — const-generic N-channel mixer with per-channel Q16.16 gain (C++ `AudioMixer4` is `AudioMixer<4>`, but any N works)
+- `AudioAmplifier` — single-channel volume control with optimized paths for zero/unity/general gain
+- `AudioSynthSine` — sine wave oscillator with phase accumulator, 257-entry wavetable, and linear interpolation
+- `AudioSynthWaveformDc` — DC level source with immediate and ramped amplitude changes
+- `AudioEffectFade` — volume fade using the fader wavetable for perceptual smoothness, with fade_in/fade_out control
+- `AudioEffectEnvelope` — full ADSR envelope with 8-state machine (Idle/Delay/Attack/Hold/Decay/Sustain/Release/Forced), 8-sample group processing, re-trigger support
+- `AudioAnalyzePeak` — peak level detector tracking min/max across blocks, with peak and peak-to-peak readout
+- `AudioAnalyzeRms` — RMS level meter accumulating sum-of-squares with sqrt readout via `libm`
+- All nodes implement `AudioNode` trait with correct input/output counts
+- 51 new unit tests (169 total); all passing; ARM cross-compilation verified
 
 ## Key Design Decisions
 

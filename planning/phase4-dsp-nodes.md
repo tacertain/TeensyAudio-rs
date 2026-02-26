@@ -1,6 +1,20 @@
-# Phase 4: DSP Nodes (Initial Set)
+# Phase 4: DSP Nodes (Initial Set) — **Complete**
 
 This phase implements the first batch of audio processing nodes — enough to build a simple synthesizer or effects chain. Each node implements the `AudioNode` trait from Phase 1.
+
+### Implementation Summary
+
+All 8 nodes implemented in `teensy-audio/src/nodes/`:
+- `AudioMixer<N>` — const-generic N-channel mixer (§4.1)
+- `AudioAmplifier` — single-channel gain (§4.2)
+- `AudioSynthSine` — sine wave oscillator (§4.3)
+- `AudioSynthWaveformDc` — DC level source (§4.4)
+- `AudioEffectFade` — volume fade (§4.5)
+- `AudioAnalyzePeak` — peak level detector (§4.6)
+- `AudioAnalyzeRms` — RMS level meter (§4.7)
+- `AudioEffectEnvelope` — ADSR envelope (§4.8)
+
+51 new unit tests added (169 total). ARM cross-compilation verified. Added `libm` dependency for `sqrt` in RMS analyzer.
 
 ## 4.1 `AudioMixer<N>` — N-channel mixer
 

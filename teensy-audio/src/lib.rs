@@ -11,3 +11,6 @@ pub mod codec;
 
 #[cfg(feature = "dsp")]
 pub mod dsp;
+
+#[cfg(feature = "dsp")]
+pub mod nodes;
