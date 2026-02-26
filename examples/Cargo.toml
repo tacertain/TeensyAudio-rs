@@ -29,7 +29,3 @@ required-features = []
 name = "graph_synth"
 path = "src/graph_synth.rs"
 required-features = []
-
-[profile.release]
-debug = 2
-opt-level = "s"
