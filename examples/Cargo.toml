@@ -29,3 +29,8 @@ required-features = []
 name = "graph_synth"
 path = "src/graph_synth.rs"
 required-features = []
+
+[[bin]]
+name = "uda1334a_sine"
+path = "src/uda1334a_sine.rs"
+required-features = []
