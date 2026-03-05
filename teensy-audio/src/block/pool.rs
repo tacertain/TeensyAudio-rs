@@ -81,8 +81,7 @@ impl AudioBlockPool {
                     let storage = self.storage.get();
                     // SAFETY: We just exclusively claimed this slot via the bitmap CAS.
                     unsafe {
-                        let block_ptr =
-                            (*storage)[slot as usize].as_mut_ptr();
+                        let block_ptr = (*storage)[slot as usize].as_mut_ptr();
                         (*block_ptr) = AudioBlockData::zeroed();
                     }
                     return Some(slot as u8);

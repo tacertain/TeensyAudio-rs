@@ -166,7 +166,7 @@ rustup target add thumbv7em-none-eabihf
 
 ### Building
 
-To build all three examples:
+To build all four examples:
 
 ```sh
 cargo build -p teensy-audio-examples --target thumbv7em-none-eabihf --release

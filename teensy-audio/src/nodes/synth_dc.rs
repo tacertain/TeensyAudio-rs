@@ -100,11 +100,7 @@ impl AudioNode for AudioSynthWaveformDc {
     const NUM_INPUTS: usize = 0;
     const NUM_OUTPUTS: usize = 1;
 
-    fn update(
-        &mut self,
-        _inputs: &[Option<AudioBlockRef>],
-        outputs: &mut [Option<AudioBlockMut>],
-    ) {
+    fn update(&mut self, _inputs: &[Option<AudioBlockRef>], outputs: &mut [Option<AudioBlockMut>]) {
         let mut out = match outputs[0].take() {
             Some(b) => b,
             None => return,
@@ -218,7 +214,11 @@ mod tests {
 
         let out = outputs[0].as_ref().unwrap();
         // 0.5 * 32767 ≈ 16383
-        assert!((out[0] - 16383).abs() <= 1, "expected ~16383, got {}", out[0]);
+        assert!(
+            (out[0] - 16383).abs() <= 1,
+            "expected ~16383, got {}",
+            out[0]
+        );
     }
 
     #[test]
@@ -237,12 +237,22 @@ mod tests {
 
         let out = outputs[0].as_ref().unwrap();
         // First sample should be near zero (just started ramping)
-        assert!(out[0].abs() < 2000, "first sample should be small, got {}", out[0]);
+        assert!(
+            out[0].abs() < 2000,
+            "first sample should be small, got {}",
+            out[0]
+        );
         // Last sample should be larger than first (ramping up)
         assert!(out[127] > out[0], "last sample should be > first");
         // Should be monotonically non-decreasing
         for i in 1..AUDIO_BLOCK_SAMPLES {
-            assert!(out[i] >= out[i - 1], "not monotonic at {}: {} < {}", i, out[i], out[i - 1]);
+            assert!(
+                out[i] >= out[i - 1],
+                "not monotonic at {}: {} < {}",
+                i,
+                out[i],
+                out[i - 1]
+            );
         }
     }
 }

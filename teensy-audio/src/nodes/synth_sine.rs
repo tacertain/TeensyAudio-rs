@@ -51,7 +51,13 @@ impl AudioSynthSine {
     ///
     /// The magnitude is stored as Q16.16: `level * 65536`.
     pub fn amplitude(&mut self, level: f32) {
-        let clamped = if level < 0.0 { 0.0 } else if level > 1.0 { 1.0 } else { level };
+        let clamped = if level < 0.0 {
+            0.0
+        } else if level > 1.0 {
+            1.0
+        } else {
+            level
+        };
         self.magnitude = (clamped * 65536.0) as i32;
     }
 
@@ -65,23 +71,23 @@ impl AudioNode for AudioSynthSine {
     const NUM_INPUTS: usize = 0;
     const NUM_OUTPUTS: usize = 1;
 
-    fn update(
-        &mut self,
-        _inputs: &[Option<AudioBlockRef>],
-        outputs: &mut [Option<AudioBlockMut>],
-    ) {
+    fn update(&mut self, _inputs: &[Option<AudioBlockRef>], outputs: &mut [Option<AudioBlockMut>]) {
         if self.magnitude == 0 {
             // Silent: advance phase but produce no output
-            self.phase_accumulator = self.phase_accumulator
-                .wrapping_add(self.phase_increment.wrapping_mul(AUDIO_BLOCK_SAMPLES as u32));
+            self.phase_accumulator = self.phase_accumulator.wrapping_add(
+                self.phase_increment
+                    .wrapping_mul(AUDIO_BLOCK_SAMPLES as u32),
+            );
             return;
         }
 
         let mut out = match outputs[0].take() {
             Some(b) => b,
             None => {
-                self.phase_accumulator = self.phase_accumulator
-                    .wrapping_add(self.phase_increment.wrapping_mul(AUDIO_BLOCK_SAMPLES as u32));
+                self.phase_accumulator = self.phase_accumulator.wrapping_add(
+                    self.phase_increment
+                        .wrapping_mul(AUDIO_BLOCK_SAMPLES as u32),
+                );
                 return;
             }
         };
@@ -153,11 +159,19 @@ mod tests {
 
         let out = outputs[0].as_ref().unwrap();
         // First sample at phase 0 should be approximately 0
-        assert!(out[0].abs() < 500, "first sample should be near zero, got {}", out[0]);
+        assert!(
+            out[0].abs() < 500,
+            "first sample should be near zero, got {}",
+            out[0]
+        );
 
         // Check that the block contains non-zero values (it's a 440Hz sine)
         let max = out.iter().map(|s| s.abs()).max().unwrap();
-        assert!(max > 10000, "sine should have significant amplitude, max={}", max);
+        assert!(
+            max > 10000,
+            "sine should have significant amplitude, max={}",
+            max
+        );
     }
 
     #[test]
@@ -215,7 +229,10 @@ mod tests {
                 assert!(
                     (ratio - 0.5).abs() < 0.1,
                     "sample {}: full={}, half={}, ratio={}",
-                    i, full[i], half[i], ratio
+                    i,
+                    full[i],
+                    half[i],
+                    ratio
                 );
             }
         }

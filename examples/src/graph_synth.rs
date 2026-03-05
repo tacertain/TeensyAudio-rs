@@ -92,22 +92,17 @@ mod app {
         /// Returns the mono mix block for routing to the output I2S.
         fn process(&mut self) -> Option<AudioBlockRef> {
             // 1. Generate sine.
-            let mut sine_out: [Option<AudioBlockMut>; 1] =
-                [AudioBlockMut::alloc()];
+            let mut sine_out: [Option<AudioBlockMut>; 1] = [AudioBlockMut::alloc()];
             self.sine.update(&[], &mut sine_out);
-            let sine_ref: Option<AudioBlockRef> =
-                sine_out[0].take().map(|b| b.into_shared());
+            let sine_ref: Option<AudioBlockRef> = sine_out[0].take().map(|b| b.into_shared());
 
             // 2. Amplifier.
-            let mut amp_out: [Option<AudioBlockMut>; 1] =
-                [AudioBlockMut::alloc()];
+            let mut amp_out: [Option<AudioBlockMut>; 1] = [AudioBlockMut::alloc()];
             self.amp.update(&[sine_ref], &mut amp_out);
-            let amp_ref: Option<AudioBlockRef> =
-                amp_out[0].take().map(|b| b.into_shared());
+            let amp_ref: Option<AudioBlockRef> = amp_out[0].take().map(|b| b.into_shared());
 
             // 3. Mixer (channel 0 only; 1–3 are silent).
-            let mut mixer_out: [Option<AudioBlockMut>; 1] =
-                [AudioBlockMut::alloc()];
+            let mut mixer_out: [Option<AudioBlockMut>; 1] = [AudioBlockMut::alloc()];
             self.mixer
                 .update(&[amp_ref, None, None, None], &mut mixer_out);
 
@@ -189,12 +184,7 @@ mod app {
         sai_rx.set_enable(true);
 
         // ── I2C + SGTL5000 codec ────────────────────────────────────
-        let i2c = board::lpi2c(
-            lpi2c1,
-            pins.p19,
-            pins.p18,
-            board::Lpi2cClockSpeed::KHz400,
-        );
+        let i2c = board::lpi2c(lpi2c1, pins.p19, pins.p18, board::Lpi2cClockSpeed::KHz400);
         let mut codec = Sgtl5000::new(i2c, AsmDelay);
         codec.enable().expect("SGTL5000 enable");
         codec.volume(0.5).expect("SGTL5000 volume");
@@ -208,19 +198,14 @@ mod app {
         dma_chan.disable();
         dma_chan.set_disable_on_completion(true);
         dma_chan.set_interrupt_on_completion(true);
-        dma_chan.set_channel_configuration(Configuration::enable(
-            sai_tx.destination_signal(),
-        ));
+        dma_chan.set_channel_configuration(Configuration::enable(sai_tx.destination_signal()));
         unsafe {
             let buf = core::slice::from_raw_parts(
                 core::ptr::addr_of!(DMA_TX_BUF) as *const u32,
                 DMA_BUF_LEN,
             );
             channel::set_source_linear_buffer(&mut dma_chan, buf);
-            channel::set_destination_hardware(
-                &mut dma_chan,
-                sai_tx.destination_address(),
-            );
+            channel::set_destination_hardware(&mut dma_chan, sai_tx.destination_address());
             dma_chan.set_minor_loop_bytes(core::mem::size_of::<u32>() as u32);
             dma_chan.set_transfer_iterations(DMA_BUF_LEN as u16);
         }
@@ -281,8 +266,7 @@ mod app {
             // ── Run the pipeline ────────────────────────────────────
             if let Some(mono) = synth.process() {
                 // Fan-out: same block to both L and R.
-                let inputs: [Option<AudioBlockRef>; 2] =
-                    [Some(mono.clone()), Some(mono)];
+                let inputs: [Option<AudioBlockRef>; 2] = [Some(mono.clone()), Some(mono)];
                 output.update(&inputs, &mut []);
             }
         }

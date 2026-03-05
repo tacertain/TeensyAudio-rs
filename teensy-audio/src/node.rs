@@ -16,9 +16,5 @@ pub trait AudioNode {
     /// `inputs` contains `NUM_INPUTS` slots, each optionally holding a shared audio block.
     /// `outputs` contains `NUM_OUTPUTS` slots, each optionally holding an exclusive audio block
     /// allocated by the caller.
-    fn update(
-        &mut self,
-        inputs: &[Option<AudioBlockRef>],
-        outputs: &mut [Option<AudioBlockMut>],
-    );
+    fn update(&mut self, inputs: &[Option<AudioBlockRef>], outputs: &mut [Option<AudioBlockMut>]);
 }

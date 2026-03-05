@@ -149,8 +149,8 @@ mod tests {
     fn deinterleave_basic() {
         // Pack known values in the new format: 2 words per frame, MSB-aligned
         let src = [
-            (100u16 as u32) << 16,  // left[0]
-            (500u16 as u32) << 16,  // right[0]
+            (100u16 as u32) << 16,           // left[0]
+            (500u16 as u32) << 16,           // right[0]
             ((-200i16 as u16) as u32) << 16, // left[1]
             ((-600i16 as u16) as u32) << 16, // right[1]
         ];

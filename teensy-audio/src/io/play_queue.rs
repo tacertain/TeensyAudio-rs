@@ -76,11 +76,7 @@ impl AudioNode for AudioPlayQueue {
     const NUM_INPUTS: usize = 0;
     const NUM_OUTPUTS: usize = 1;
 
-    fn update(
-        &mut self,
-        _inputs: &[Option<AudioBlockRef>],
-        outputs: &mut [Option<AudioBlockMut>],
-    ) {
+    fn update(&mut self, _inputs: &[Option<AudioBlockRef>], outputs: &mut [Option<AudioBlockMut>]) {
         if let Some(block) = self.queue.pop() {
             outputs[0] = Some(block);
         }

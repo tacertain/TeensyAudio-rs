@@ -49,11 +49,7 @@ impl AudioNode for AudioAmplifier {
     const NUM_INPUTS: usize = 1;
     const NUM_OUTPUTS: usize = 1;
 
-    fn update(
-        &mut self,
-        inputs: &[Option<AudioBlockRef>],
-        outputs: &mut [Option<AudioBlockMut>],
-    ) {
+    fn update(&mut self, inputs: &[Option<AudioBlockRef>], outputs: &mut [Option<AudioBlockMut>]) {
         let input = match inputs[0] {
             Some(ref b) => b,
             None => return, // No input, leave output as None (silence)

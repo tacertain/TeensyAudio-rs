@@ -61,12 +61,12 @@
 
 #![no_std]
 
-pub mod constants;
 pub mod block;
-pub mod node;
+pub mod constants;
 pub mod control;
-pub mod io;
 pub mod graph;
+pub mod io;
+pub mod node;
 
 #[cfg(feature = "sgtl5000")]
 pub mod codec;

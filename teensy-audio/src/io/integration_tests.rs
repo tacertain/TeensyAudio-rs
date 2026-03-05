@@ -63,12 +63,10 @@ mod tests {
         let right_data = make_ramp(1000, -1); // 1000, 999, 998, ...
 
         // Snapshot expected values before blocks are consumed
-        let expected_left: [i16; AUDIO_BLOCK_SAMPLES] = core::array::from_fn(|i| {
-            (0i16).wrapping_add(i as i16)
-        });
-        let expected_right: [i16; AUDIO_BLOCK_SAMPLES] = core::array::from_fn(|i| {
-            1000i16.wrapping_add(-1 * i as i16)
-        });
+        let expected_left: [i16; AUDIO_BLOCK_SAMPLES] =
+            core::array::from_fn(|i| (0i16).wrapping_add(i as i16));
+        let expected_right: [i16; AUDIO_BLOCK_SAMPLES] =
+            core::array::from_fn(|i| 1000i16.wrapping_add(-1 * i as i16));
 
         // Step 1: User pushes blocks into PlayQueue
         play_queue.play(left_data).unwrap();
@@ -220,7 +218,11 @@ mod tests {
         }
         // Right channel should be silent
         for i in 0..AUDIO_BLOCK_SAMPLES {
-            assert_eq!(recv_right[i], 0, "right should be silent at {i}, got {}", recv_right[i]);
+            assert_eq!(
+                recv_right[i], 0,
+                "right should be silent at {i}, got {}",
+                recv_right[i]
+            );
         }
     }
 
@@ -329,7 +331,10 @@ mod tests {
         output.isr(&mut dma_buf);
 
         for (i, &sample) in dma_buf.iter().enumerate() {
-            assert_eq!(sample, 0, "DMA buffer should be silent at index {i}, got {sample:#X}");
+            assert_eq!(
+                sample, 0,
+                "DMA buffer should be silent at index {i}, got {sample:#X}"
+            );
         }
 
         // InputI2S with silence buffer should produce zero blocks

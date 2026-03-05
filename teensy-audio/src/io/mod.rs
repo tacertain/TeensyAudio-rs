@@ -24,15 +24,15 @@
 //! - 16-bit samples are placed in the upper 16 bits of each 32-bit word (`<< 16`)
 //! - DMA runs in one-shot mode: ISR fills the buffer and re-arms DMA
 
-pub mod interleave;
-pub mod spsc;
-pub mod output_i2s;
 pub mod input_i2s;
+pub mod interleave;
+pub mod output_i2s;
 pub mod play_queue;
 pub mod record_queue;
+pub mod spsc;
 
-pub use output_i2s::AudioOutputI2S;
 pub use input_i2s::AudioInputI2S;
+pub use output_i2s::AudioOutputI2S;
 pub use play_queue::AudioPlayQueue;
 pub use record_queue::AudioRecordQueue;
 

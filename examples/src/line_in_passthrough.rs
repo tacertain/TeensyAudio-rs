@@ -134,12 +134,7 @@ mod app {
         sai_rx.set_enable(true);
 
         // ── I2C + SGTL5000 codec ────────────────────────────────────
-        let i2c = board::lpi2c(
-            lpi2c1,
-            pins.p19,
-            pins.p18,
-            board::Lpi2cClockSpeed::KHz400,
-        );
+        let i2c = board::lpi2c(lpi2c1, pins.p19, pins.p18, board::Lpi2cClockSpeed::KHz400);
         let mut codec = Sgtl5000::new(i2c, AsmDelay);
         codec.enable().expect("SGTL5000 enable");
         codec.volume(0.6).expect("SGTL5000 volume");
@@ -156,19 +151,14 @@ mod app {
         dma_tx.disable();
         dma_tx.set_disable_on_completion(true);
         dma_tx.set_interrupt_on_completion(true);
-        dma_tx.set_channel_configuration(Configuration::enable(
-            sai_tx.destination_signal(),
-        ));
+        dma_tx.set_channel_configuration(Configuration::enable(sai_tx.destination_signal()));
         unsafe {
             let buf = core::slice::from_raw_parts(
                 core::ptr::addr_of!(DMA_TX_BUF) as *const u32,
                 DMA_BUF_LEN,
             );
             channel::set_source_linear_buffer(&mut dma_tx, buf);
-            channel::set_destination_hardware(
-                &mut dma_tx,
-                sai_tx.destination_address(),
-            );
+            channel::set_destination_hardware(&mut dma_tx, sai_tx.destination_address());
             dma_tx.set_minor_loop_bytes(core::mem::size_of::<u32>() as u32);
             dma_tx.set_transfer_iterations(DMA_BUF_LEN as u16);
         }
@@ -262,10 +252,8 @@ mod app {
                     [AudioBlockMut::alloc(), AudioBlockMut::alloc()];
                 input.update(&[], &mut input_outs);
 
-                let l: Option<AudioBlockRef> =
-                    input_outs[0].take().map(|b| b.into_shared());
-                let r: Option<AudioBlockRef> =
-                    input_outs[1].take().map(|b| b.into_shared());
+                let l: Option<AudioBlockRef> = input_outs[0].take().map(|b| b.into_shared());
+                let r: Option<AudioBlockRef> = input_outs[1].take().map(|b| b.into_shared());
                 output.update(&[l, r], &mut []);
             });
         }

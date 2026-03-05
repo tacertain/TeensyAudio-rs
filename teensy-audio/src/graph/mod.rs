@@ -235,7 +235,11 @@ mod tests {
 
         // Before note_on: envelope is idle, should produce no output
         graph.update_all();
-        let level_idle = if graph.peak.available() { graph.peak.read() } else { 0.0 };
+        let level_idle = if graph.peak.available() {
+            graph.peak.read()
+        } else {
+            0.0
+        };
 
         // Trigger note and process
         graph.env.note_on();
@@ -246,7 +250,8 @@ mod tests {
         assert!(
             level_active > level_idle,
             "active level ({}) should exceed idle level ({})",
-            level_active, level_idle
+            level_active,
+            level_idle
         );
     }
 

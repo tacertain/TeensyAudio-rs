@@ -88,10 +88,7 @@ impl AudioInputI2S {
     /// # Returns
     ///
     /// `true` if the audio graph should be updated.
-    pub fn isr(
-        &mut self,
-        dma_buffer: &[u32; AUDIO_BLOCK_SAMPLES * 2],
-    ) -> bool {
+    pub fn isr(&mut self, dma_buffer: &[u32; AUDIO_BLOCK_SAMPLES * 2]) -> bool {
         // De-interleave into working blocks
         if let (Some(ref mut left), Some(ref mut right)) =
             (&mut self.block_left, &mut self.block_right)
@@ -123,11 +120,7 @@ impl AudioNode for AudioInputI2S {
     const NUM_INPUTS: usize = 0;
     const NUM_OUTPUTS: usize = 2;
 
-    fn update(
-        &mut self,
-        _inputs: &[Option<AudioBlockRef>],
-        outputs: &mut [Option<AudioBlockMut>],
-    ) {
+    fn update(&mut self, _inputs: &[Option<AudioBlockRef>], outputs: &mut [Option<AudioBlockMut>]) {
         // Try to allocate new working blocks (need both or neither)
         let new_left = AudioBlockMut::alloc();
         let new_right = if new_left.is_some() {

@@ -100,10 +100,7 @@ impl AudioOutputI2S {
     ///
     /// `true` if the audio graph should be updated (i.e., `update_all()`
     /// should be called), when `update_responsibility` is set.
-    pub fn isr(
-        &mut self,
-        dma_buffer: &mut [u32; AUDIO_BLOCK_SAMPLES * 2],
-    ) -> bool {
+    pub fn isr(&mut self, dma_buffer: &mut [u32; AUDIO_BLOCK_SAMPLES * 2]) -> bool {
         // Interleave audio data into the DMA buffer
         match (&self.block_left_1st, &self.block_right_1st) {
             (Some(left), Some(right)) => {
@@ -147,11 +144,7 @@ impl AudioNode for AudioOutputI2S {
     const NUM_INPUTS: usize = 2;
     const NUM_OUTPUTS: usize = 0;
 
-    fn update(
-        &mut self,
-        inputs: &[Option<AudioBlockRef>],
-        _outputs: &mut [Option<AudioBlockMut>],
-    ) {
+    fn update(&mut self, inputs: &[Option<AudioBlockRef>], _outputs: &mut [Option<AudioBlockMut>]) {
         // Input 0 = left channel
         if let Some(ref block) = inputs[0] {
             if self.block_left_1st.is_none() {

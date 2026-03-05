@@ -133,8 +133,8 @@ impl Drop for AudioBlockRef {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::pool::POOL;
+    use super::*;
 
     fn reset_pool() {
         POOL.reset();

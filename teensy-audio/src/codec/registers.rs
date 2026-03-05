@@ -227,9 +227,9 @@ pub const DAP_COEF_WR_B0_LSB: u16 = 0x0110;
 
 /// 5-band graphic EQ band registers (read/write).
 pub const DAP_AUDIO_EQ_BASS_BAND0: u16 = 0x0116; // 115 Hz
-pub const DAP_AUDIO_EQ_BAND1: u16 = 0x0118;       // 330 Hz
-pub const DAP_AUDIO_EQ_BAND2: u16 = 0x011A;       // 990 Hz
-pub const DAP_AUDIO_EQ_BAND3: u16 = 0x011C;       // 3000 Hz
+pub const DAP_AUDIO_EQ_BAND1: u16 = 0x0118; // 330 Hz
+pub const DAP_AUDIO_EQ_BAND2: u16 = 0x011A; // 990 Hz
+pub const DAP_AUDIO_EQ_BAND3: u16 = 0x011C; // 3000 Hz
 pub const DAP_AUDIO_EQ_TREBLE_BAND4: u16 = 0x011E; // 9900 Hz
 
 /// DAP main and mix channel volume.

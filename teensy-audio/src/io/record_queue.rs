@@ -96,11 +96,7 @@ impl AudioNode for AudioRecordQueue {
     const NUM_INPUTS: usize = 1;
     const NUM_OUTPUTS: usize = 0;
 
-    fn update(
-        &mut self,
-        inputs: &[Option<AudioBlockRef>],
-        _outputs: &mut [Option<AudioBlockMut>],
-    ) {
+    fn update(&mut self, inputs: &[Option<AudioBlockRef>], _outputs: &mut [Option<AudioBlockMut>]) {
         if !self.recording {
             return;
         }

@@ -68,11 +68,7 @@ impl AudioNode for AudioAnalyzeRms {
     const NUM_INPUTS: usize = 1;
     const NUM_OUTPUTS: usize = 0;
 
-    fn update(
-        &mut self,
-        inputs: &[Option<AudioBlockRef>],
-        _outputs: &mut [Option<AudioBlockMut>],
-    ) {
+    fn update(&mut self, inputs: &[Option<AudioBlockRef>], _outputs: &mut [Option<AudioBlockMut>]) {
         match inputs[0] {
             Some(ref input) => {
                 let mut sum = self.accum;
@@ -162,7 +158,12 @@ mod tests {
 
         let level = rms.read();
         let expected = 16384.0 / 32767.0;
-        assert!((level - expected).abs() < 0.01, "expected ~{}, got {}", expected, level);
+        assert!(
+            (level - expected).abs() < 0.01,
+            "expected ~{}, got {}",
+            expected,
+            level
+        );
     }
 
     #[test]
@@ -182,7 +183,12 @@ mod tests {
 
         let level = rms.read();
         let expected = 16384.0 / 32767.0;
-        assert!((level - expected).abs() < 0.01, "expected ~{}, got {}", expected, level);
+        assert!(
+            (level - expected).abs() < 0.01,
+            "expected ~{}, got {}",
+            expected,
+            level
+        );
     }
 
     #[test]

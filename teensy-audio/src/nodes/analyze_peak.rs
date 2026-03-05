@@ -80,11 +80,7 @@ impl AudioNode for AudioAnalyzePeak {
     const NUM_INPUTS: usize = 1;
     const NUM_OUTPUTS: usize = 0;
 
-    fn update(
-        &mut self,
-        inputs: &[Option<AudioBlockRef>],
-        _outputs: &mut [Option<AudioBlockMut>],
-    ) {
+    fn update(&mut self, inputs: &[Option<AudioBlockRef>], _outputs: &mut [Option<AudioBlockMut>]) {
         let input = match inputs[0] {
             Some(ref b) => b,
             None => return,
@@ -182,8 +178,8 @@ mod tests {
 
         let mut input = AudioBlockMut::alloc().unwrap();
         input.fill(0);
-        input[0] = 16384;   // +0.5
-        input[1] = -16384;  // -0.5
+        input[0] = 16384; // +0.5
+        input[1] = -16384; // -0.5
 
         let input_ref = input.into_shared();
         let inputs = [Some(input_ref)];
@@ -221,7 +217,12 @@ mod tests {
         // Should report the overall max (20000)
         let level = peak.read();
         let expected = 20000.0 / 32767.0;
-        assert!((level - expected).abs() < 0.01, "expected ~{}, got {}", expected, level);
+        assert!(
+            (level - expected).abs() < 0.01,
+            "expected ~{}, got {}",
+            expected,
+            level
+        );
     }
 
     #[test]

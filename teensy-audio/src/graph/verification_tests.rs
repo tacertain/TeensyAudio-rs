@@ -212,14 +212,19 @@ mod tests {
                     assert!(
                         level > 0.0,
                         "cycle {}: signal should be present, got {}",
-                        cycle, level
+                        cycle,
+                        level
                     );
                 }
             }
         }
 
         // Over 100 cycles, we should have gotten meaningful readings
-        assert!(max_peak > 0.3, "max peak should be substantial, got {}", max_peak);
+        assert!(
+            max_peak > 0.3,
+            "max peak should be substantial, got {}",
+            max_peak
+        );
         assert!(
             POOL.allocated_count() == 0,
             "no pool leaks after 100 cycles"

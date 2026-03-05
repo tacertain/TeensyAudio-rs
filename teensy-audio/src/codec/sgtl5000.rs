@@ -204,11 +204,7 @@ where
     ///
     /// * `ext_mclk` — External MCLK frequency in Hz.
     /// * `pll_freq` — Desired PLL output frequency, typically `4096 × Fs`.
-    pub fn enable_with_pll(
-        &mut self,
-        ext_mclk: u32,
-        pll_freq: u32,
-    ) -> Result<(), I2C::Error> {
+    pub fn enable_with_pll(&mut self, ext_mclk: u32, pll_freq: u32) -> Result<(), I2C::Error> {
         self.delay.delay_ms(5);
 
         // Check if already initialized (recovery from Teensy reset)
@@ -406,10 +402,7 @@ where
         let input_gain = ((remaining * 2) / 3).min(15) as u16;
 
         self.write_register(reg::CHIP_MIC_CTRL, 0x0170 | preamp_gain)?;
-        self.write_register(
-            reg::CHIP_ANA_ADC_CTRL,
-            (input_gain << 4) | input_gain,
-        )
+        self.write_register(reg::CHIP_ANA_ADC_CTRL, (input_gain << 4) | input_gain)
     }
 
     // ── DAC volume ─────────────────────────────────────────────────────
@@ -426,11 +419,7 @@ where
         }
         let l = 0xFC - Self::calc_vol(left, 0xC0);
         let r = 0xFC - Self::calc_vol(right, 0xC0);
-        self.modify(
-            reg::CHIP_DAC_VOL,
-            ((r as u16) << 8) | l as u16,
-            0xFFFF,
-        )?;
+        self.modify(reg::CHIP_DAC_VOL, ((r as u16) << 8) | l as u16, 0xFFFF)?;
         Ok(())
     }
 
@@ -547,11 +536,7 @@ where
     /// Load raw biquad filter coefficients into a PEQ slot (0–6).
     ///
     /// `coefficients` must be `[b0, b1, b2, a1, a2]`.
-    pub fn eq_filter(
-        &mut self,
-        filter_num: u8,
-        coefficients: &[i32; 5],
-    ) -> Result<(), I2C::Error> {
+    pub fn eq_filter(&mut self, filter_num: u8, coefficients: &[i32; 5]) -> Result<(), I2C::Error> {
         if self.semi_automated {
             self.automate_with_filter_count(1, 1, filter_num + 1)?;
         }
@@ -575,20 +560,12 @@ where
 
     /// Set surround sound width (0–7).
     pub fn surround_sound(&mut self, width: u8) -> Result<(), I2C::Error> {
-        self.modify(
-            reg::DAP_SGTL_SURROUND,
-            ((width & 7) as u16) << 4,
-            7 << 4,
-        )?;
+        self.modify(reg::DAP_SGTL_SURROUND, ((width & 7) as u16) << 4, 7 << 4)?;
         Ok(())
     }
 
     /// Set surround sound width and select mode.
-    pub fn surround_sound_with_select(
-        &mut self,
-        width: u8,
-        select: u8,
-    ) -> Result<(), I2C::Error> {
+    pub fn surround_sound_with_select(&mut self, width: u8, select: u8) -> Result<(), I2C::Error> {
         self.modify(
             reg::DAP_SGTL_SURROUND,
             (((width & 7) as u16) << 4) | (select & 3) as u16,
@@ -837,12 +814,7 @@ mod tests {
             Ok(())
         }
 
-        fn write_read(
-            &mut self,
-            _addr: u8,
-            wr: &[u8],
-            rd: &mut [u8],
-        ) -> Result<(), Self::Error> {
+        fn write_read(&mut self, _addr: u8, wr: &[u8], rd: &mut [u8]) -> Result<(), Self::Error> {
             if wr.len() >= 2 && rd.len() >= 2 {
                 let reg = ((wr[0] as u16) << 8) | wr[1] as u16;
                 let val = self.read_reg(reg);

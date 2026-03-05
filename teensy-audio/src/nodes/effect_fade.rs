@@ -102,11 +102,7 @@ impl AudioNode for AudioEffectFade {
     const NUM_INPUTS: usize = 1;
     const NUM_OUTPUTS: usize = 1;
 
-    fn update(
-        &mut self,
-        inputs: &[Option<AudioBlockRef>],
-        outputs: &mut [Option<AudioBlockMut>],
-    ) {
+    fn update(&mut self, inputs: &[Option<AudioBlockRef>], outputs: &mut [Option<AudioBlockMut>]) {
         let input = match inputs[0] {
             Some(ref b) => b,
             None => {
@@ -115,10 +111,18 @@ impl AudioNode for AudioEffectFade {
                     let advance = (self.rate as u64) * (AUDIO_BLOCK_SAMPLES as u64);
                     if self.direction_in {
                         let new_pos = (self.position as u64).saturating_add(advance);
-                        self.position = if new_pos > MAX_FADE as u64 { MAX_FADE } else { new_pos as u32 };
+                        self.position = if new_pos > MAX_FADE as u64 {
+                            MAX_FADE
+                        } else {
+                            new_pos as u32
+                        };
                     } else {
                         let new_pos = (self.position as u64).wrapping_sub(advance);
-                        self.position = if self.position as u64 <= advance { 0 } else { new_pos as u32 };
+                        self.position = if self.position as u64 <= advance {
+                            0
+                        } else {
+                            new_pos as u32
+                        };
                     }
                 }
                 return;
@@ -151,9 +155,17 @@ impl AudioNode for AudioEffectFade {
                     let advance = (self.rate as u64) * (AUDIO_BLOCK_SAMPLES as u64);
                     if self.direction_in {
                         let new_pos = (self.position as u64).saturating_add(advance);
-                        self.position = if new_pos > MAX_FADE as u64 { MAX_FADE } else { new_pos as u32 };
+                        self.position = if new_pos > MAX_FADE as u64 {
+                            MAX_FADE
+                        } else {
+                            new_pos as u32
+                        };
                     } else {
-                        self.position = if self.position as u64 <= advance { 0 } else { (self.position as u64 - advance) as u32 };
+                        self.position = if self.position as u64 <= advance {
+                            0
+                        } else {
+                            (self.position as u64 - advance) as u32
+                        };
                     }
                 }
                 return;
@@ -259,7 +271,12 @@ mod tests {
 
         let out = outputs[0].as_ref().unwrap();
         // Samples should be increasing (fading in)
-        assert!(out[127] > out[0], "last should be louder than first: {} vs {}", out[127], out[0]);
+        assert!(
+            out[127] > out[0],
+            "last should be louder than first: {} vs {}",
+            out[127],
+            out[0]
+        );
     }
 
     #[test]
@@ -279,7 +296,12 @@ mod tests {
 
         let out = outputs[0].as_ref().unwrap();
         // Samples should be decreasing (fading out)
-        assert!(out[0] > out[127], "first should be louder than last: {} vs {}", out[0], out[127]);
+        assert!(
+            out[0] > out[127],
+            "first should be louder than last: {} vs {}",
+            out[0],
+            out[127]
+        );
     }
 
     #[test]

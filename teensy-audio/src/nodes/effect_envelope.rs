@@ -110,9 +110,17 @@ impl AudioEffectEnvelope {
 
     /// Convert milliseconds to count of 8-sample groups.
     fn milliseconds2count(milliseconds: f32) -> u16 {
-        let ms = if milliseconds < 0.0 { 0.0 } else { milliseconds };
+        let ms = if milliseconds < 0.0 {
+            0.0
+        } else {
+            milliseconds
+        };
         let c = ((ms * SAMPLES_PER_MSEC) as u32 + 7) >> 3;
-        if c > 65535 { 65535 } else { c as u16 }
+        if c > 65535 {
+            65535
+        } else {
+            c as u16
+        }
     }
 
     /// Set initial delay before attack (milliseconds).
@@ -139,7 +147,13 @@ impl AudioEffectEnvelope {
 
     /// Set sustain level (0.0 = silent, 1.0 = full volume).
     pub fn sustain(&mut self, level: f32) {
-        let clamped = if level < 0.0 { 0.0 } else if level > 1.0 { 1.0 } else { level };
+        let clamped = if level < 0.0 {
+            0.0
+        } else if level > 1.0 {
+            1.0
+        } else {
+            level
+        };
         self.sustain_mult = (clamped * 1_073_741_824.0) as i32;
     }
 
@@ -210,11 +224,7 @@ impl AudioNode for AudioEffectEnvelope {
     const NUM_INPUTS: usize = 1;
     const NUM_OUTPUTS: usize = 1;
 
-    fn update(
-        &mut self,
-        inputs: &[Option<AudioBlockRef>],
-        outputs: &mut [Option<AudioBlockMut>],
-    ) {
+    fn update(&mut self, inputs: &[Option<AudioBlockRef>], outputs: &mut [Option<AudioBlockMut>]) {
         let has_input = inputs[0].is_some();
 
         if self.state == EnvelopeState::Idle {
@@ -248,15 +258,13 @@ impl AudioNode for AudioEffectEnvelope {
                         } else {
                             self.state = EnvelopeState::Decay;
                             self.count = self.decay_count;
-                            self.inc_hires =
-                                (self.sustain_mult - UNITY_GAIN) / self.count as i32;
+                            self.inc_hires = (self.sustain_mult - UNITY_GAIN) / self.count as i32;
                         }
                     }
                     EnvelopeState::Hold => {
                         self.state = EnvelopeState::Decay;
                         self.count = self.decay_count;
-                        self.inc_hires =
-                            (self.sustain_mult - UNITY_GAIN) / self.count as i32;
+                        self.inc_hires = (self.sustain_mult - UNITY_GAIN) / self.count as i32;
                     }
                     EnvelopeState::Decay => {
                         self.state = EnvelopeState::Sustain;
@@ -401,14 +409,13 @@ mod tests {
         let out = outputs[0].as_ref().unwrap();
         // During attack, should be ramping up from 0
         // First samples should be quieter than last
-        let first_group_avg: i32 =
-            out[0..8].iter().map(|&s| s as i32).sum::<i32>() / 8;
-        let last_group_avg: i32 =
-            out[120..128].iter().map(|&s| s as i32).sum::<i32>() / 8;
+        let first_group_avg: i32 = out[0..8].iter().map(|&s| s as i32).sum::<i32>() / 8;
+        let last_group_avg: i32 = out[120..128].iter().map(|&s| s as i32).sum::<i32>() / 8;
         assert!(
             last_group_avg > first_group_avg,
             "attack should ramp up: first_avg={}, last_avg={}",
-            first_group_avg, last_group_avg
+            first_group_avg,
+            last_group_avg
         );
     }
 

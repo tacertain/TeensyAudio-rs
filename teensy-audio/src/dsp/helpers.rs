@@ -1,7 +1,7 @@
 //! Block-level DSP helper functions and Q15 arithmetic.
 
-use crate::constants::AUDIO_BLOCK_SAMPLES;
 use super::intrinsics::saturate16;
+use crate::constants::AUDIO_BLOCK_SAMPLES;
 
 /// Saturating multiply of two Q15 values.
 ///
@@ -27,10 +27,7 @@ pub fn block_multiply(block: &mut [i16; AUDIO_BLOCK_SAMPLES], gain: i32) {
 }
 
 /// Saturating-add `src` into `dst` sample-by-sample.
-pub fn block_accumulate(
-    dst: &mut [i16; AUDIO_BLOCK_SAMPLES],
-    src: &[i16; AUDIO_BLOCK_SAMPLES],
-) {
+pub fn block_accumulate(dst: &mut [i16; AUDIO_BLOCK_SAMPLES], src: &[i16; AUDIO_BLOCK_SAMPLES]) {
     for (d, &s) in dst.iter_mut().zip(src.iter()) {
         *d = saturate16(*d as i32 + s as i32);
     }

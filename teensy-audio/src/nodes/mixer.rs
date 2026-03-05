@@ -85,11 +85,7 @@ impl<const N: usize> AudioNode for AudioMixer<N> {
     const NUM_INPUTS: usize = N;
     const NUM_OUTPUTS: usize = 1;
 
-    fn update(
-        &mut self,
-        inputs: &[Option<AudioBlockRef>],
-        outputs: &mut [Option<AudioBlockMut>],
-    ) {
+    fn update(&mut self, inputs: &[Option<AudioBlockRef>], outputs: &mut [Option<AudioBlockMut>]) {
         let out_block = match outputs[0].take() {
             Some(b) => b,
             None => return,
@@ -261,9 +257,8 @@ mod tests {
 
         let input_ref = input.into_shared();
         let mut outputs = [Some(output)];
-        let inputs: [Option<AudioBlockRef>; 8] = [
-            None, None, None, None, None, None, None, Some(input_ref),
-        ];
+        let inputs: [Option<AudioBlockRef>; 8] =
+            [None, None, None, None, None, None, None, Some(input_ref)];
 
         mixer.update(&inputs, &mut outputs);
 
