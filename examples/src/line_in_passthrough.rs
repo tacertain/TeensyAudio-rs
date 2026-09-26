@@ -54,7 +54,7 @@ mod app {
     const AUDIO_BLOCK_SAMPLES: usize = 128;
     const DMA_BUF_LEN: usize = AUDIO_BLOCK_SAMPLES * 2;
 
-    type SaiRx = hal::sai::Rx<1, 32, 2, hal::sai::PackingNone>;
+    type SaiRx = hal::sai::Rx;
 
     // ── RTIC resources ───────────────────────────────────────────────
 
@@ -125,7 +125,7 @@ mod app {
             c
         };
         let (Some(mut sai_tx), Some(mut sai_rx)) =
-            sai.split::<32, 2, hal::sai::PackingNone>(&sai_config)
+            sai.split(32, 2, hal::sai::Packing::None, &sai_config).expect("SAI packing")
         else {
             panic!("SAI split failed");
         };
