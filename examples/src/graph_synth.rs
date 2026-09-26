@@ -174,8 +174,9 @@ mod app {
             c.mclk_source = hal::sai::MclkSource::Select1;
             c
         };
-        let (Some(mut sai_tx), Some(mut sai_rx)) =
-            sai.split(32, 2, hal::sai::Packing::None, &sai_config).expect("SAI packing")
+        let (Some(mut sai_tx), Some(mut sai_rx)) = sai
+            .split(32, 2, hal::sai::Packing::None, &sai_config)
+            .expect("SAI packing")
         else {
             panic!("SAI split failed");
         };
