@@ -292,7 +292,7 @@ where
             self.write_register(reg::CHIP_ANA_HP_CTRL, 0x7F7F)?;
             return self.mute_headphone();
         }
-        let n = if n > 0x80 { 0 } else { 0x80 - n };
+        let n = 0x80u32.saturating_sub(n);
         if self.muted {
             self.muted = false;
             self.unmute_headphone()?;
@@ -661,12 +661,7 @@ where
     /// Write a single DAP EQ band value (maps ±1.0 to 0–95 register range).
     fn dap_audio_eq_band(&mut self, band: u8, level: f32) -> Result<(), I2C::Error> {
         let mut n = level * 48.0 + 0.499;
-        if n < -47.0 {
-            n = -47.0;
-        }
-        if n > 48.0 {
-            n = 48.0;
-        }
+        n = n.clamp(-47.0, 48.0);
         n += 47.0;
         let addr = reg::DAP_AUDIO_EQ_BASS_BAND0 + (band as u16) * 2;
         self.modify(addr, n as u16, 127)?;

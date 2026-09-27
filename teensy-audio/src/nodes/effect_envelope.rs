@@ -75,6 +75,12 @@ pub struct AudioEffectEnvelope {
     release_forced_count: u16,
 }
 
+impl Default for AudioEffectEnvelope {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioEffectEnvelope {
     /// Create a new envelope with default settings matching the C++ library:
     /// - delay: 0 ms
@@ -147,13 +153,7 @@ impl AudioEffectEnvelope {
 
     /// Set sustain level (0.0 = silent, 1.0 = full volume).
     pub fn sustain(&mut self, level: f32) {
-        let clamped = if level < 0.0 {
-            0.0
-        } else if level > 1.0 {
-            1.0
-        } else {
-            level
-        };
+        let clamped = level.clamp(0.0, 1.0);
         self.sustain_mult = (clamped * 1_073_741_824.0) as i32;
     }
 
@@ -232,14 +232,7 @@ impl AudioNode for AudioEffectEnvelope {
             return;
         }
 
-        let mut out = if has_input {
-            match outputs[0].take() {
-                Some(b) => Some(b),
-                None => None,
-            }
-        } else {
-            None
-        };
+        let mut out = if has_input { outputs[0].take() } else { None };
 
         // Process 128 samples in groups of 8 (16 groups total)
         let num_groups = AUDIO_BLOCK_SAMPLES / SAMPLES_PER_GROUP as usize;

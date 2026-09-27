@@ -42,6 +42,12 @@ pub struct AudioPlayQueue {
     queue: SpscQueue<AudioBlockMut, QUEUE_SIZE>,
 }
 
+impl Default for AudioPlayQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioPlayQueue {
     /// Create a new play queue.
     pub const fn new() -> Self {

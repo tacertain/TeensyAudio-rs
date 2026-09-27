@@ -29,6 +29,12 @@ pub struct AudioEffectFade {
     direction_in: bool,
 }
 
+impl Default for AudioEffectFade {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioEffectFade {
     /// Create a new fade effect, initially at full volume (no fade).
     pub const fn new() -> Self {

@@ -1,6 +1,6 @@
 //! Audio graph macro for declarative node wiring.
 //!
-//! The [`audio_graph!`] macro generates a typed struct containing all audio nodes
+//! The [`audio_graph!`](crate::audio_graph) macro generates a typed struct containing all audio nodes
 //! with an `update_all()` method that processes them in the declared order and
 //! routes audio blocks between connected ports.
 //!

@@ -29,6 +29,12 @@ pub struct AudioSynthSine {
     magnitude: i32,
 }
 
+impl Default for AudioSynthSine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioSynthSine {
     /// Create a new sine oscillator, initially silent (magnitude = 0).
     pub const fn new() -> Self {
@@ -51,13 +57,7 @@ impl AudioSynthSine {
     ///
     /// The magnitude is stored as Q16.16: `level * 65536`.
     pub fn amplitude(&mut self, level: f32) {
-        let clamped = if level < 0.0 {
-            0.0
-        } else if level > 1.0 {
-            1.0
-        } else {
-            level
-        };
+        let clamped = level.clamp(0.0, 1.0);
         self.magnitude = (clamped * 65536.0) as i32;
     }
 

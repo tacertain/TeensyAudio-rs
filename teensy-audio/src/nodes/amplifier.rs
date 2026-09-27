@@ -22,6 +22,12 @@ pub struct AudioAmplifier {
     multiplier: i32,
 }
 
+impl Default for AudioAmplifier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioAmplifier {
     /// Create a new amplifier at unity gain.
     pub const fn new() -> Self {
@@ -34,13 +40,7 @@ impl AudioAmplifier {
     ///
     /// 0.0 = silence, 1.0 = unity, >1.0 = boost. Clamped to ±32767.0.
     pub fn gain(&mut self, level: f32) {
-        let clamped = if level > 32767.0 {
-            32767.0
-        } else if level < -32767.0 {
-            -32767.0
-        } else {
-            level
-        };
+        let clamped = level.clamp(-32767.0, 32767.0);
         self.multiplier = (clamped * 65536.0) as i32;
     }
 }

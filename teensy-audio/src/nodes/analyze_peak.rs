@@ -26,6 +26,12 @@ pub struct AudioAnalyzePeak {
     new_output: bool,
 }
 
+impl Default for AudioAnalyzePeak {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioAnalyzePeak {
     /// Create a new peak analyzer.
     pub const fn new() -> Self {

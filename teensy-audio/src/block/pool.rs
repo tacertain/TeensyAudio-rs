@@ -40,7 +40,7 @@ unsafe impl Sync for AudioBlockPool {}
 
 impl AudioBlockPool {
     /// Create a new pool. All slots start unallocated.
-    #[allow(clippy::declare_interior_mut_const)]
+    #[allow(clippy::declare_interior_mutable_const)]
     const fn new() -> Self {
         const ZERO_REFCOUNT: AtomicU8 = AtomicU8::new(0);
         AudioBlockPool {

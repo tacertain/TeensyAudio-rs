@@ -37,6 +37,12 @@ pub struct SpscQueue<T, const N: usize> {
 unsafe impl<T: Send, const N: usize> Sync for SpscQueue<T, N> {}
 unsafe impl<T: Send, const N: usize> Send for SpscQueue<T, N> {}
 
+impl<T, const N: usize> Default for SpscQueue<T, N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T, const N: usize> SpscQueue<T, N> {
     /// Create a new empty queue.
     ///

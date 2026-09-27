@@ -8,7 +8,7 @@ use crate::constants::AUDIO_BLOCK_SAMPLES;
 /// Computes `(a * b) >> 15`, saturated to `i16` range.
 #[inline(always)]
 pub fn saturating_multiply_q15(a: i16, b: i16) -> i16 {
-    saturate16(((a as i32 * b as i32) >> 15) as i32)
+    saturate16((a as i32 * b as i32) >> 15)
 }
 
 /// Saturating addition of two Q15 (`i16`) values.

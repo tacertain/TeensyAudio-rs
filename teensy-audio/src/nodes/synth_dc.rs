@@ -27,6 +27,12 @@ pub struct AudioSynthWaveformDc {
     transitioning: bool,
 }
 
+impl Default for AudioSynthWaveformDc {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioSynthWaveformDc {
     /// Create a new DC source at zero output.
     pub const fn new() -> Self {
@@ -40,13 +46,7 @@ impl AudioSynthWaveformDc {
 
     /// Set DC level immediately (-1.0 to 1.0).
     pub fn amplitude(&mut self, level: f32) {
-        let clamped = if level > 1.0 {
-            1.0
-        } else if level < -1.0 {
-            -1.0
-        } else {
-            level
-        };
+        let clamped = level.clamp(-1.0, 1.0);
         // Scale to match C++ behavior: magnitude uses upper 16 bits as sample value
         // C++ uses 2147418112.0 ≈ 0x7FFF0000 for 1.0
         self.magnitude = (clamped * 2_147_418_112.0) as i32;
@@ -55,13 +55,7 @@ impl AudioSynthWaveformDc {
 
     /// Set DC level with a smooth ramp over the specified duration.
     pub fn amplitude_ramp(&mut self, level: f32, milliseconds: f32) {
-        let clamped = if level > 1.0 {
-            1.0
-        } else if level < -1.0 {
-            -1.0
-        } else {
-            level
-        };
+        let clamped = level.clamp(-1.0, 1.0);
         let new_target = (clamped * 2_147_418_112.0) as i32;
 
         if milliseconds <= 0.0 {

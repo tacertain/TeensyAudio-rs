@@ -45,6 +45,12 @@ pub struct AudioRecordQueue {
     recording: bool,
 }
 
+impl Default for AudioRecordQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioRecordQueue {
     /// Create a new record queue (recording is initially stopped).
     pub const fn new() -> Self {
@@ -89,6 +95,11 @@ impl AudioRecordQueue {
     /// Return the number of captured blocks waiting to be read.
     pub fn len(&self) -> usize {
         self.queue.len()
+    }
+
+    /// True when no captured blocks are waiting.
+    pub fn is_empty(&self) -> bool {
+        self.queue.is_empty()
     }
 }
 

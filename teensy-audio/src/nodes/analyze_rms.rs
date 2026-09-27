@@ -29,6 +29,12 @@ pub struct AudioAnalyzeRms {
     new_output: bool,
 }
 
+impl Default for AudioAnalyzeRms {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioAnalyzeRms {
     /// Create a new RMS analyzer.
     pub const fn new() -> Self {

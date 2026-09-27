@@ -55,9 +55,9 @@
 //! ## Audio parameters
 //!
 //! - **Block size:** 128 samples ([`constants::AUDIO_BLOCK_SAMPLES`])
-//! - **Sample rate:** 44 117.647 Hz ([`constants::AUDIO_SAMPLE_RATE`])
+//! - **Sample rate:** 44 117.647 Hz ([`constants::AUDIO_SAMPLE_RATE_EXACT`])
 //! - **Sample format:** `i16` (signed 16-bit)
-//! - **Block pool:** 32 blocks ([`constants::AUDIO_MEMORY_BLOCKS`])
+//! - **Block pool:** 32 blocks ([`constants::POOL_SIZE`])
 
 #![no_std]
 

@@ -5,4 +5,6 @@ pub const AUDIO_BLOCK_SAMPLES: usize = 128;
 pub const POOL_SIZE: usize = 32;
 
 /// Exact audio sample rate in Hz (matches Teensy hardware PLL configuration).
+// The literal keeps the value from the C++ library; f32 rounds it either way.
+#[allow(clippy::excessive_precision)]
 pub const AUDIO_SAMPLE_RATE_EXACT: f32 = 44_117.647;

@@ -26,6 +26,12 @@ pub struct AudioMixer<const N: usize> {
     multiplier: [i32; N],
 }
 
+impl<const N: usize> Default for AudioMixer<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const N: usize> AudioMixer<N> {
     /// Create a new mixer with all channels at unity gain.
     pub const fn new() -> Self {
@@ -42,13 +48,7 @@ impl<const N: usize> AudioMixer<N> {
         if channel >= N {
             return;
         }
-        let clamped = if level > 32767.0 {
-            32767.0
-        } else if level < -32767.0 {
-            -32767.0
-        } else {
-            level
-        };
+        let clamped = level.clamp(-32767.0, 32767.0);
         self.multiplier[channel] = (clamped * 65536.0) as i32;
     }
 }
@@ -94,8 +94,8 @@ impl<const N: usize> AudioNode for AudioMixer<N> {
         let mut out = out_block;
         let mut initialized = false;
 
-        for ch in 0..N {
-            if let Some(ref input) = inputs[ch] {
+        for (ch, input) in inputs.iter().enumerate().take(N) {
+            if let Some(input) = input {
                 let mult = self.multiplier[ch];
                 if !initialized {
                     // First active channel: copy (with gain) into output buffer
