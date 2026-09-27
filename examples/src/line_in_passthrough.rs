@@ -24,11 +24,17 @@
 //! **A FIFO error latches.** After an overflow or an underrun the SAI holds
 //! that FIFO idle until the error flag is cleared. With DMA that is a trap:
 //! no data means no DMA request, so no interrupt runs that could clear the
-//! flag, and the stream is dead until reset. The receiver is switched on
-//! early, because it supplies the clocks, so its FIFO has overflowed long
-//! before the DMA channel is ready; it is emptied and its flags cleared as
-//! the last step of start-up. Both interrupts also clear any error they find,
-//! so a late interrupt costs a click and not the stream.
+//! flag, and the stream is dead until reset. Both interrupts clear any error
+//! they find, so a late interrupt costs a click and not the stream.
+//!
+//! **The receiver is switched on last.** It supplies the bit and frame
+//! clocks, so it is tempting to switch it on first. But then its FIFO
+//! overflows while the codec is being set up, and emptying a FIFO while the
+//! receiver runs lands in mid-frame: the next word stored is the right
+//! channel, and left and right are swapped from then on. Switched on with its
+//! DMA channel already waiting, it starts at a frame boundary, left first,
+//! and never overflows. The codec does not need it: MCLK alone is enough for
+//! its set-up over I2C.
 //!
 //! **The DMA channels are one-shot and re-armed by their interrupts.** The
 //! FIFO holds 32 words, about a third of a millisecond of stereo audio, and
@@ -103,15 +109,6 @@ mod app {
     /// The SAI's write-one-to-clear flags: word start, sync error, FIFO error.
     const SAI_W1C: u32 = (1 << 20) | (1 << 19) | (1 << 18);
     const SAI_FIFO_ERROR: u32 = 1 << 18;
-    const SAI_FIFO_RESET: u32 = 1 << 25;
-
-    /// Empty the receive FIFO and clear its flags, so reception starts clean.
-    fn restart_rx_fifo() {
-        let sai = unsafe { ral::sai::SAI1::instance() };
-        ral::modify_reg!(ral::sai, sai, RCSR, |r| (r & !SAI_W1C)
-            | SAI_FIFO_RESET
-            | SAI_W1C);
-    }
 
     /// Clear a latched FIFO error on either side, and count it.
     fn clear_fifo_errors() {
@@ -228,8 +225,7 @@ mod app {
             panic!("SAI split failed");
         };
 
-        // Enable RX — clock source in TxFollowRx mode.
-        sai_rx.set_enable(true);
+        // The receiver is switched on last; see the top of this file.
 
         // ── I2C + SGTL5000 codec ────────────────────────────────────
         let i2c = board::lpi2c(lpi2c1, pins.p19, pins.p18, board::Lpi2cClockSpeed::KHz400);
@@ -285,14 +281,14 @@ mod app {
         }
 
         // Start everything: the DMA channels, then the requests, then the
-        // receive FIFO, which overflowed while the codec was being set up.
+        // receiver, which supplies the clocks, then the transmitter.
         unsafe {
             dma_tx.enable();
             dma_rx.enable();
         }
         sai_rx.enable_dma_receive();
         sai_tx.enable_dma_transmit();
-        restart_rx_fifo();
+        sai_rx.set_enable(true);
         sai_tx.set_enable(true);
 
         (

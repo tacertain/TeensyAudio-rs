@@ -146,19 +146,6 @@ mod app {
     /// The SAI's write-one-to-clear flags: word start, sync error, FIFO error.
     const SAI_W1C: u32 = (1 << 20) | (1 << 19) | (1 << 18);
     const SAI_FIFO_ERROR: u32 = 1 << 18;
-    const SAI_FIFO_RESET: u32 = 1 << 25;
-
-    /// Empty the receive FIFO and clear its error flags.
-    ///
-    /// A FIFO error latches: the receiver holds its FIFO empty until the flag
-    /// is cleared, so no data arrives, no DMA request is made, and no
-    /// interrupt runs that could clear it.
-    fn restart_rx_fifo() {
-        let sai = unsafe { ral::sai::SAI1::instance() };
-        ral::modify_reg!(ral::sai, sai, RCSR, |r| (r & !SAI_W1C)
-            | SAI_FIFO_RESET
-            | SAI_W1C);
-    }
 
     /// Clear a latched FIFO error on either side. Returns which had one.
     fn clear_fifo_errors() -> (bool, bool) {
@@ -187,6 +174,8 @@ mod app {
     static PEAK_R: AtomicU16 = AtomicU16::new(0);
     /// 1 if the audio path was started, 0 if it was left off (safe mode).
     static AUDIO_STARTED: AtomicU32 = AtomicU32::new(0);
+    /// Which codec calls succeeded: 1 enable, 2 volume, 4 input select. 7 is all.
+    static CODEC_OK: AtomicU32 = AtomicU32::new(0);
 
     #[local]
     struct Local {
@@ -267,17 +256,25 @@ mod app {
         };
         STAGE.store(3, Ordering::Relaxed);
 
-        // Enable RX — clock source in TxFollowRx mode.
-        sai_rx.set_enable(true);
+        // The receiver supplies the bit and frame clocks, but it is not
+        // switched on here. Switched on before its DMA channel is ready it
+        // overflows, and emptying its FIFO afterwards, in mid-frame, left the
+        // two channels swapped. The codec is set up over I2C with MCLK alone.
 
         // ── I2C + SGTL5000 codec ────────────────────────────────────
         let i2c = board::lpi2c(lpi2c1, pins.p19, pins.p18, board::Lpi2cClockSpeed::KHz400);
         let mut codec = Sgtl5000::new(i2c, AsmDelay);
-        codec.enable().expect("SGTL5000 enable");
-        codec.volume(0.4).expect("SGTL5000 volume");
-        codec
-            .input_select(Input::LineIn)
-            .expect("SGTL5000 input select");
+        let mut codec_ok = 0;
+        if codec.enable().is_ok() {
+            codec_ok |= 1;
+        }
+        if codec.volume(0.4).is_ok() {
+            codec_ok |= 2;
+        }
+        if codec.input_select(Input::LineIn).is_ok() {
+            codec_ok |= 4;
+        }
+        CODEC_OK.store(codec_ok, Ordering::Relaxed);
         STAGE.store(4, Ordering::Relaxed);
 
         let input = AudioInputI2S::new(false);
@@ -334,7 +331,9 @@ mod app {
             }
             sai_rx.enable_dma_receive();
             sai_tx.enable_dma_transmit();
-            restart_rx_fifo();
+            // The receiver starts at a frame boundary, with its DMA channel
+            // already waiting: no overflow, and left arrives first.
+            sai_rx.set_enable(true);
             sai_tx.set_enable(true);
             AUDIO_STARTED.store(1, Ordering::Relaxed);
         }
@@ -499,10 +498,11 @@ mod app {
         }
 
         log::info!(
-            "DIAG t={}.{} stage={} audio={} tx={} rx={} tx_fifo_err={} rx_fifo_err={} peakL={} peakR={}",
+            "DIAG t={}.{} stage={} codec={} audio={} tx={} rx={} tx_fifo_err={} rx_fifo_err={} peakL={} peakR={}",
             ticks / REPORTS_PER_SECOND,
             (ticks % REPORTS_PER_SECOND) * 5,
             SNAP_STAGE.load(Ordering::Relaxed),
+            CODEC_OK.load(Ordering::Relaxed),
             AUDIO_STARTED.load(Ordering::Relaxed),
             TX_IRQS.load(Ordering::Relaxed),
             RX_IRQS.load(Ordering::Relaxed),
