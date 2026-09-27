@@ -6,8 +6,3 @@ resolver = "2"
 debug = 2
 opt-level = "s"
 
-[patch.crates-io]
-# Siblings, so local extensions are picked up. Both are at the upstream releases
-# (ral 0.6.2, hal 0.6.0) as of 2026-09-26.
-imxrt-ral = { path = "../imxrt-ral" }
-imxrt-hal = { path = "../imxrt-hal" }

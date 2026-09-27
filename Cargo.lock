@@ -224,6 +224,8 @@ dependencies = [
 [[package]]
 name = "imxrt-hal"
 version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbfcef664c97cc60f6fc3b74ff858ff84b95de89bcfad9884dd0d97823c17d71"
 dependencies = [
  "bitflags",
  "cfg-if",
@@ -248,6 +250,8 @@ checksum = "e49e4e4a4f2c73284ec46cd459a9c4eb7d93b8876a8a6cf5cd379e36e677bc83"
 [[package]]
 name = "imxrt-ral"
 version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1273a68b30fa03f8f3045e4fe717c4abf1e168abc4c80c6f2fdee4d0885d7f79"
 dependencies = [
  "cortex-m",
  "ral-registers",
@@ -473,6 +477,8 @@ dependencies = [
 [[package]]
 name = "teensy4-bsp"
 version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0510330fd5eb4d84f2feb79a63c10738ff99046ad0776e79e52abda2a59c8308"
 dependencies = [
  "cortex-m",
  "imxrt-hal",
@@ -486,6 +492,8 @@ dependencies = [
 [[package]]
 name = "teensy4-fcb"
 version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96405c9b853d707246e0cde4df7b6d81f504e4139313fce04e5300eae4909dcc"
 dependencies = [
  "imxrt-boot-gen",
 ]
@@ -493,10 +501,14 @@ dependencies = [
 [[package]]
 name = "teensy4-panic"
 version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d503b918cd7db4e1c1261bc80b0c992e0065369fc08e11fa66e281079c82c57"
 
 [[package]]
 name = "teensy4-pins"
 version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5a2b3046a6101eab154df06a3cd8f413efdfbe182c56b7a843825cac9219fad"
 dependencies = [
  "imxrt-iomuxc",
 ]

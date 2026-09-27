@@ -147,15 +147,14 @@ The `examples/` workspace crate contains three RTIC firmware binaries for
 
 ### Prerequisites
 
-The examples depend on sibling repositories via relative paths. Your directory
-layout must look like this:
+The examples depend on `teensy4-bsp`, `teensy4-panic` and `imxrt-ral` from
+crates.io, so a plain clone builds. To test against a local checkout of one of
+those crates (for example while changing `imxrt-hal`), add a `[patch.crates-io]`
+section to the workspace `Cargo.toml` and do not commit it:
 
-```
-parent/
-├── TeensyAudio-rs/    ← this repo
-├── teensy4-rs/        ← https://github.com/pjrc-rs/teensy4-rs
-├── imxrt-hal/         ← https://github.com/imxrt-rs/imxrt-hal
-└── imxrt-ral/         ← https://github.com/imxrt-rs/imxrt-ral
+```toml
+[patch.crates-io]
+imxrt-hal = { path = "../imxrt-hal" }
 ```
 
 You also need the `thumbv7em-none-eabihf` target installed:

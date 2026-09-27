@@ -52,7 +52,7 @@ jobs:
         with:
           targets: thumbv7em-none-eabihf
       - run: cargo check -p teensy-audio --target thumbv7em-none-eabihf
-
+      - run: cargo build -p teensy-audio-examples --target thumbv7em-none-eabihf --release
   # ── Documentation ──────────────────────────────────────────────────
   doc:
     name: rustdoc
