@@ -15,9 +15,27 @@
 //!
 //! Once a second a low-priority task reports over USB serial how many transmit
 //! and receive interrupts ran, the peak level seen on each input channel, and how many
-//! receive FIFO errors the SAI flagged. A receive count of zero means no data
-//! is arriving from the codec at all; a peak of zero with a healthy count
+//! FIFO errors the SAI flagged on each side. A receive count of zero means no
+//! data is arriving from the codec at all; a peak of zero with a healthy count
 //! means data is arriving and it is silence.
+//!
+//! # Two things this example has to get right
+//!
+//! **A FIFO error latches.** After an overflow or an underrun the SAI holds
+//! that FIFO idle until the error flag is cleared. With DMA that is a trap:
+//! no data means no DMA request, so no interrupt runs that could clear the
+//! flag, and the stream is dead until reset. The receiver is switched on
+//! early, because it supplies the clocks, so its FIFO has overflowed long
+//! before the DMA channel is ready; it is emptied and its flags cleared as
+//! the last step of start-up. Both interrupts also clear any error they find,
+//! so a late interrupt costs a click and not the stream.
+//!
+//! **The DMA channels are one-shot and re-armed by their interrupts.** The
+//! FIFO holds 32 words, about a third of a millisecond of stereo audio, and
+//! that is how long the interrupt has to re-arm. Nothing slow may run at or
+//! above the audio interrupts' priority. The report is formatted in a task
+//! below them for that reason: formatting it inside the transmit interrupt
+//! underran the FIFO on the first report.
 //!
 //! Both DMA channels share the same ISR priority so they cannot preempt
 //! each other. The TX DMA ISR drives the audio graph update; the RX DMA
@@ -75,9 +93,47 @@ mod app {
     static RX_IRQS: AtomicU32 = AtomicU32::new(0);
     static TX_IRQS: AtomicU32 = AtomicU32::new(0);
     static RX_FIFO_ERRORS: AtomicU32 = AtomicU32::new(0);
+    static TX_FIFO_ERRORS: AtomicU32 = AtomicU32::new(0);
     /// Largest magnitude seen on each input channel, 0 to 32768.
     static PEAK_L: AtomicU16 = AtomicU16::new(0);
     static PEAK_R: AtomicU16 = AtomicU16::new(0);
+
+    // ── FIFO errors ──────────────────────────────────────────────────
+
+    /// The SAI's write-one-to-clear flags: word start, sync error, FIFO error.
+    const SAI_W1C: u32 = (1 << 20) | (1 << 19) | (1 << 18);
+    const SAI_FIFO_ERROR: u32 = 1 << 18;
+    const SAI_FIFO_RESET: u32 = 1 << 25;
+
+    /// Empty the receive FIFO and clear its flags, so reception starts clean.
+    fn restart_rx_fifo() {
+        let sai = unsafe { ral::sai::SAI1::instance() };
+        ral::modify_reg!(ral::sai, sai, RCSR, |r| (r & !SAI_W1C)
+            | SAI_FIFO_RESET
+            | SAI_W1C);
+    }
+
+    /// Clear a latched FIFO error on either side, and count it.
+    fn clear_fifo_errors() {
+        let sai = unsafe { ral::sai::SAI1::instance() };
+        if ral::read_reg!(ral::sai, sai, TCSR) & SAI_FIFO_ERROR != 0 {
+            ral::modify_reg!(ral::sai, sai, TCSR, |r| (r & !SAI_W1C) | SAI_FIFO_ERROR);
+            TX_FIFO_ERRORS.fetch_add(1, Ordering::Relaxed);
+        }
+        if ral::read_reg!(ral::sai, sai, RCSR) & SAI_FIFO_ERROR != 0 {
+            ral::modify_reg!(ral::sai, sai, RCSR, |r| (r & !SAI_W1C) | SAI_FIFO_ERROR);
+            RX_FIFO_ERRORS.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Hand the chip to the Teensy bootloader, as Teensyduino does.
+    #[cfg(feature = "auto-bootloader")]
+    fn enter_bootloader() -> ! {
+        unsafe { core::arch::asm!("bkpt #251") };
+        loop {
+            cortex_m::asm::nop();
+        }
+    }
 
     /// A peak as dBFS, for the log. Silence is reported as -99.
     fn dbfs(peak: u16) -> i32 {
@@ -95,7 +151,7 @@ mod app {
         dma_tx: Channel,
         dma_rx: Channel,
         output: AudioOutputI2S,
-        sai_rx: SaiRx,
+        _sai_rx: SaiRx,
         poller: logging::Poller,
     }
 
@@ -228,13 +284,15 @@ mod app {
             dma_rx.set_transfer_iterations(DMA_BUF_LEN as u16);
         }
 
-        // Start everything.
-        sai_rx.enable_dma_receive();
-        sai_tx.enable_dma_transmit();
+        // Start everything: the DMA channels, then the requests, then the
+        // receive FIFO, which overflowed while the codec was being set up.
         unsafe {
             dma_tx.enable();
             dma_rx.enable();
         }
+        sai_rx.enable_dma_receive();
+        sai_tx.enable_dma_transmit();
+        restart_rx_fifo();
         sai_tx.set_enable(true);
 
         (
@@ -244,7 +302,7 @@ mod app {
                 dma_tx,
                 dma_rx,
                 output,
-                sai_rx,
+                _sai_rx: sai_rx,
                 poller,
             },
         )
@@ -252,10 +310,9 @@ mod app {
 
     // ── RX DMA ISR: capture incoming audio data ──────────────────────
 
-    #[task(binds = DMA1_DMA17, shared = [input], local = [dma_rx, sai_rx], priority = 2)]
+    #[task(binds = DMA1_DMA17, shared = [input], local = [dma_rx, _sai_rx], priority = 2)]
     fn dma_rx_isr(mut cx: dma_rx_isr::Context) {
         let dma_rx = cx.local.dma_rx;
-        let sai_rx = cx.local.sai_rx;
 
         while dma_rx.is_interrupt() {
             dma_rx.clear_interrupt();
@@ -263,10 +320,7 @@ mod app {
         dma_rx.clear_complete();
 
         RX_IRQS.fetch_add(1, Ordering::Relaxed);
-        if sai_rx.status().contains(hal::sai::Status::FIFO_ERROR) {
-            sai_rx.clear_status(hal::sai::Status::FIFO_ERROR);
-            RX_FIFO_ERRORS.fetch_add(1, Ordering::Relaxed);
-        }
+        clear_fifo_errors();
 
         // De-interleave captured audio into the input node's working blocks.
         let dma_buf = unsafe { &*DMA_RX_BUF.as_ptr() };
@@ -327,6 +381,7 @@ mod app {
             });
         }
 
+        clear_fifo_errors();
         TX_IRQS.fetch_add(1, Ordering::Relaxed);
 
         *toggle += 1;
@@ -354,13 +409,19 @@ mod app {
             Systick::delay(1000.millis()).await;
             seconds += 1;
 
+            #[cfg(feature = "auto-bootloader")]
+            if seconds > 12 {
+                enter_bootloader();
+            }
+
             let peak_l = PEAK_L.swap(0, Ordering::Relaxed);
             let peak_r = PEAK_R.swap(0, Ordering::Relaxed);
             log::info!(
-                "[{:>4}s] tx_irqs={} rx_irqs={} rx_fifo_errors={}  input peak L={} ({} dBFS) R={} ({} dBFS)",
+                "[{:>4}s] tx_irqs={} rx_irqs={} fifo_errors tx={} rx={}  input peak L={} ({} dBFS) R={} ({} dBFS)",
                 seconds,
                 TX_IRQS.swap(0, Ordering::Relaxed),
                 RX_IRQS.swap(0, Ordering::Relaxed),
+                TX_FIFO_ERRORS.swap(0, Ordering::Relaxed),
                 RX_FIFO_ERRORS.swap(0, Ordering::Relaxed),
                 peak_l,
                 dbfs(peak_l),

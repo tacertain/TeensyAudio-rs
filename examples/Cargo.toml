@@ -20,6 +20,14 @@ imxrt-log = { version = "0.2", default-features = false, features = ["log", "usb
 log = "0.4"
 rtic-monotonics = { version = "1", default-features = false, features = ["cortex-m-systick"] }
 libm = "0.2"
+# Needed for `#[exception]` to work through imxrt-rt; see its documentation.
+cortex-m-rt = "0.7"
+[features]
+# For unattended bench runs: the example hands the board to the Teensy
+# bootloader after a few seconds, so the next build can be flashed without
+# pressing the button. Never enable this for firmware that is meant to stay.
+auto-bootloader = []
+
 [[bin]]
 name = "sine_tone"
 path = "src/sine_tone.rs"
@@ -38,4 +46,9 @@ required-features = []
 [[bin]]
 name = "uda1334a_sine"
 path = "src/uda1334a_sine.rs"
+required-features = []
+
+[[bin]]
+name = "passthrough_diag"
+path = "src/passthrough_diag.rs"
 required-features = []
