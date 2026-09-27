@@ -15,6 +15,10 @@ cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
 rtic = { version = "2", features = ["thumbv7-backend"] }
 embedded-hal = "1.0"
 imxrt-ral = { version = "0.6", features = ["imxrt1062"] }
+# USB serial logging, for the examples that report what they measure.
+imxrt-log = { version = "0.2", default-features = false, features = ["log", "usbd"] }
+log = "0.4"
+libm = "0.2"
 [[bin]]
 name = "sine_tone"
 path = "src/sine_tone.rs"

@@ -13,6 +13,12 @@
 //!   SGTL5000: line-in selected, headphone output
 //! ```
 //!
+//! Once a second it reports over USB serial how many transmit and receive
+//! interrupts ran, the peak level seen on each input channel, and how many
+//! receive FIFO errors the SAI flagged. A receive count of zero means no data
+//! is arriving from the codec at all; a peak of zero with a healthy count
+//! means data is arriving and it is silence.
+//!
 //! Both DMA channels share the same ISR priority so they cannot preempt
 //! each other. The TX DMA ISR drives the audio graph update; the RX DMA
 //! ISR only captures incoming data. The input node is shared between the
@@ -43,7 +49,10 @@ mod app {
     use teensy4_bsp as bsp;
 
     use hal::dma::channel::{self, Channel, Configuration};
-    use hal::dma::peripheral::Destination;
+    use hal::dma::peripheral::{Destination, Source};
+
+    use core::sync::atomic::{AtomicU16, AtomicU32, Ordering};
+    use imxrt_log as logging;
 
     use teensy_audio::block::{AudioBlockMut, AudioBlockRef};
     use teensy_audio::codec::{Input, Sgtl5000};
@@ -56,6 +65,28 @@ mod app {
 
     type SaiRx = hal::sai::Rx;
 
+    // ── Input monitor ────────────────────────────────────────────────
+    //
+    // Written by the two DMA interrupts, read and cleared once a second.
+
+    /// Transmit DMA interrupts per report: 44117.647 Hz / 128 samples.
+    const REPORT_EVERY: u32 = 345;
+
+    static RX_IRQS: AtomicU32 = AtomicU32::new(0);
+    static TX_IRQS: AtomicU32 = AtomicU32::new(0);
+    static RX_FIFO_ERRORS: AtomicU32 = AtomicU32::new(0);
+    /// Largest magnitude seen on each input channel, 0 to 32768.
+    static PEAK_L: AtomicU16 = AtomicU16::new(0);
+    static PEAK_R: AtomicU16 = AtomicU16::new(0);
+
+    /// A peak as dBFS, for the log. Silence is reported as -99.
+    fn dbfs(peak: u16) -> i32 {
+        if peak == 0 {
+            return -99;
+        }
+        (20.0 * libm::log10f(peak as f32 / 32768.0)) as i32
+    }
+
     // ── RTIC resources ───────────────────────────────────────────────
 
     #[local]
@@ -64,7 +95,8 @@ mod app {
         dma_tx: Channel,
         dma_rx: Channel,
         output: AudioOutputI2S,
-        _sai_rx: SaiRx,
+        sai_rx: SaiRx,
+        poller: logging::Poller,
     }
 
     #[shared]
@@ -91,10 +123,12 @@ mod app {
             mut dma,
             sai1,
             lpi2c1,
+            usb,
             ..
         } = board::t41(cx.device);
 
         let led = board::led(&mut gpio2, pins.p13);
+        let poller = logging::log::usbd(usb, logging::Interrupts::Enabled).unwrap();
 
         // ── MCLK direction: output ──────────────────────────────────
         unsafe {
@@ -165,22 +199,30 @@ mod app {
         }
 
         // ── DMA channel 1 → SAI1 RX ────────────────────────────────
+        //
+        // The mirror image of the transmit channel above: route the SAI's
+        // receive request to this channel, and read from its data register.
+        // Without these the channel is armed and never triggered, and the
+        // input node only ever sees an empty buffer.
         let mut dma_rx = dma[1].take().expect("DMA ch1");
         dma_rx.disable();
         dma_rx.set_disable_on_completion(true);
         dma_rx.set_interrupt_on_completion(true);
+        dma_rx.set_channel_configuration(Configuration::enable(sai_rx.source_signal()));
 
         unsafe {
             let buf = core::slice::from_raw_parts_mut(
                 core::ptr::addr_of_mut!(DMA_RX_BUF) as *mut u32,
                 DMA_BUF_LEN,
             );
+            channel::set_source_hardware(&mut dma_rx, sai_rx.source_address());
             channel::set_destination_linear_buffer(&mut dma_rx, buf);
             dma_rx.set_minor_loop_bytes(core::mem::size_of::<u32>() as u32);
             dma_rx.set_transfer_iterations(DMA_BUF_LEN as u16);
         }
 
         // Start everything.
+        sai_rx.enable_dma_receive();
         sai_tx.enable_dma_transmit();
         unsafe {
             dma_tx.enable();
@@ -195,24 +237,43 @@ mod app {
                 dma_tx,
                 dma_rx,
                 output,
-                _sai_rx: sai_rx,
+                sai_rx,
+                poller,
             },
         )
     }
 
     // ── RX DMA ISR: capture incoming audio data ──────────────────────
 
-    #[task(binds = DMA1_DMA17, shared = [input], local = [dma_rx, _sai_rx], priority = 2)]
+    #[task(binds = DMA1_DMA17, shared = [input], local = [dma_rx, sai_rx], priority = 2)]
     fn dma_rx_isr(mut cx: dma_rx_isr::Context) {
         let dma_rx = cx.local.dma_rx;
+        let sai_rx = cx.local.sai_rx;
 
         while dma_rx.is_interrupt() {
             dma_rx.clear_interrupt();
         }
         dma_rx.clear_complete();
 
+        RX_IRQS.fetch_add(1, Ordering::Relaxed);
+        if sai_rx.status().contains(hal::sai::Status::FIFO_ERROR) {
+            sai_rx.clear_status(hal::sai::Status::FIFO_ERROR);
+            RX_FIFO_ERRORS.fetch_add(1, Ordering::Relaxed);
+        }
+
         // De-interleave captured audio into the input node's working blocks.
         let dma_buf = unsafe { &*DMA_RX_BUF.as_ptr() };
+
+        // Peak of each channel. The 16-bit sample is the top half of each
+        // 32-bit word, left then right.
+        let (mut peak_l, mut peak_r) = (0u16, 0u16);
+        for frame in dma_buf.chunks_exact(2) {
+            peak_l = peak_l.max(((frame[0] >> 16) as i16).unsigned_abs());
+            peak_r = peak_r.max(((frame[1] >> 16) as i16).unsigned_abs());
+        }
+        PEAK_L.fetch_max(peak_l, Ordering::Relaxed);
+        PEAK_R.fetch_max(peak_r, Ordering::Relaxed);
+
         cx.shared.input.lock(|input| {
             input.isr(dma_buf);
         });
@@ -259,9 +320,25 @@ mod app {
             });
         }
 
+        TX_IRQS.fetch_add(1, Ordering::Relaxed);
+
         *toggle += 1;
         if *toggle % 172 == 0 {
             led.toggle();
+        }
+        if *toggle % REPORT_EVERY == 0 {
+            let peak_l = PEAK_L.swap(0, Ordering::Relaxed);
+            let peak_r = PEAK_R.swap(0, Ordering::Relaxed);
+            log::info!(
+                "tx_irqs={} rx_irqs={} rx_fifo_errors={}  input peak L={} ({} dBFS) R={} ({} dBFS)",
+                TX_IRQS.swap(0, Ordering::Relaxed),
+                RX_IRQS.swap(0, Ordering::Relaxed),
+                RX_FIFO_ERRORS.swap(0, Ordering::Relaxed),
+                peak_l,
+                dbfs(peak_l),
+                peak_r,
+                dbfs(peak_r),
+            );
         }
 
         // Re-arm TX DMA.
@@ -274,5 +351,12 @@ mod app {
             dma_tx.set_transfer_iterations(DMA_BUF_LEN as u16);
             dma_tx.enable();
         }
+    }
+
+    // ── USB serial logging ───────────────────────────────────────────
+
+    #[task(binds = USB_OTG1, local = [poller])]
+    fn usb_log(cx: usb_log::Context) {
+        cx.local.poller.poll();
     }
 }
