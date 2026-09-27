@@ -10,7 +10,7 @@ autoexamples = false
 [dependencies]
 teensy-audio = { path = "../teensy-audio", features = ["dsp", "sgtl5000"] }
 teensy4-bsp = { version = "0.6", features = ["rt"] }
-teensy4-panic = "0.3"
+teensy4-panic = { version = "0.3", features = ["log"] }
 cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
 rtic = { version = "2", features = ["thumbv7-backend"] }
 embedded-hal = "1.0"
@@ -18,6 +18,7 @@ imxrt-ral = { version = "0.6", features = ["imxrt1062"] }
 # USB serial logging, for the examples that report what they measure.
 imxrt-log = { version = "0.2", default-features = false, features = ["log", "usbd"] }
 log = "0.4"
+rtic-monotonics = { version = "1", default-features = false, features = ["cortex-m-systick"] }
 libm = "0.2"
 [[bin]]
 name = "sine_tone"

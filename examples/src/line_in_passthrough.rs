@@ -13,8 +13,8 @@
 //!   SGTL5000: line-in selected, headphone output
 //! ```
 //!
-//! Once a second it reports over USB serial how many transmit and receive
-//! interrupts ran, the peak level seen on each input channel, and how many
+//! Once a second a low-priority task reports over USB serial how many transmit
+//! and receive interrupts ran, the peak level seen on each input channel, and how many
 //! receive FIFO errors the SAI flagged. A receive count of zero means no data
 //! is arriving from the codec at all; a peak of zero with a healthy count
 //! means data is arriving and it is silence.
@@ -53,6 +53,7 @@ mod app {
 
     use core::sync::atomic::{AtomicU16, AtomicU32, Ordering};
     use imxrt_log as logging;
+    use rtic_monotonics::systick::*;
 
     use teensy_audio::block::{AudioBlockMut, AudioBlockRef};
     use teensy_audio::codec::{Input, Sgtl5000};
@@ -67,10 +68,9 @@ mod app {
 
     // ── Input monitor ────────────────────────────────────────────────
     //
-    // Written by the two DMA interrupts, read and cleared once a second.
-
-    /// Transmit DMA interrupts per report: 44117.647 Hz / 128 samples.
-    const REPORT_EVERY: u32 = 345;
+    // The two DMA interrupts only add to these counters. A low-priority task
+    // reads and clears them once a second and does the formatting, so nothing
+    // slow runs at the audio interrupts' priority.
 
     static RX_IRQS: AtomicU32 = AtomicU32::new(0);
     static TX_IRQS: AtomicU32 = AtomicU32::new(0);
@@ -129,6 +129,13 @@ mod app {
 
         let led = board::led(&mut gpio2, pins.p13);
         let poller = logging::log::usbd(usb, logging::Interrupts::Enabled).unwrap();
+
+        Systick::start(
+            cx.core.SYST,
+            board::ARM_FREQUENCY,
+            rtic_monotonics::create_systick_token!(),
+        );
+        report::spawn().unwrap();
 
         // ── MCLK direction: output ──────────────────────────────────
         unsafe {
@@ -326,21 +333,6 @@ mod app {
         if *toggle % 172 == 0 {
             led.toggle();
         }
-        if *toggle % REPORT_EVERY == 0 {
-            let peak_l = PEAK_L.swap(0, Ordering::Relaxed);
-            let peak_r = PEAK_R.swap(0, Ordering::Relaxed);
-            log::info!(
-                "tx_irqs={} rx_irqs={} rx_fifo_errors={}  input peak L={} ({} dBFS) R={} ({} dBFS)",
-                TX_IRQS.swap(0, Ordering::Relaxed),
-                RX_IRQS.swap(0, Ordering::Relaxed),
-                RX_FIFO_ERRORS.swap(0, Ordering::Relaxed),
-                peak_l,
-                dbfs(peak_l),
-                peak_r,
-                dbfs(peak_r),
-            );
-        }
-
         // Re-arm TX DMA.
         unsafe {
             let buf = core::slice::from_raw_parts(
@@ -350,6 +342,31 @@ mod app {
             channel::set_source_linear_buffer(dma_tx, buf);
             dma_tx.set_transfer_iterations(DMA_BUF_LEN as u16);
             dma_tx.enable();
+        }
+    }
+
+    // ── Input monitor report ─────────────────────────────────────────
+
+    #[task]
+    async fn report(_cx: report::Context) {
+        let mut seconds = 0u32;
+        loop {
+            Systick::delay(1000.millis()).await;
+            seconds += 1;
+
+            let peak_l = PEAK_L.swap(0, Ordering::Relaxed);
+            let peak_r = PEAK_R.swap(0, Ordering::Relaxed);
+            log::info!(
+                "[{:>4}s] tx_irqs={} rx_irqs={} rx_fifo_errors={}  input peak L={} ({} dBFS) R={} ({} dBFS)",
+                seconds,
+                TX_IRQS.swap(0, Ordering::Relaxed),
+                RX_IRQS.swap(0, Ordering::Relaxed),
+                RX_FIFO_ERRORS.swap(0, Ordering::Relaxed),
+                peak_l,
+                dbfs(peak_l),
+                peak_r,
+                dbfs(peak_r),
+            );
         }
     }
 
