@@ -88,7 +88,7 @@ fn main() {
 | `control` | `AudioControl` trait (hardware enable/disable/volume) |
 | `io` | I²S I/O, play/record queues, SPSC ring buffer |
 | `codec` | SGTL5000 register-level I²C driver *(feature `sgtl5000`)* |
-| `dsp` | Fixed-point math utilities *(feature `dsp`)* |
+| `dsp` | Fixed-point math utilities and `f32` kernels *(feature `dsp`)* |
 | `nodes` | Synthesis, effects & analysis nodes *(feature `dsp`)* |
 | `graph` | `audio_graph!` macro for declarative wiring |
 
@@ -104,6 +104,15 @@ fn main() {
 | Effects | `AudioEffectEnvelope` | ADSR envelope generator |
 | Analysis | `AudioAnalyzePeak` | Peak absolute amplitude |
 | Analysis | `AudioAnalyzeRms` | RMS level measurement |
+
+## DSP kernels
+
+Per-sample `f32` processors for code that runs its own loop over a block, rather than
+nodes in the graph.
+
+| Kernel | Description |
+|--------|-------------|
+| `dsp::ladder::Ladder` | Moog ladder low-pass, a port of the C++ `AudioFilterLadder` (Huovilainen model, 4x oversampled through its 36-tap polyphase FIR) with a per-sample cutoff CV |
 
 ## Cargo features
 
@@ -252,6 +261,7 @@ contested this way.
 - [x] HAL integration examples (DMA-driven I²S on i.MX RT1062)
 - [ ] Additional waveforms (square, sawtooth, triangle, noise)
 - [ ] FIR / biquad filters
+- [x] Ladder filter (`dsp::ladder`, a kernel; no graph node yet)
 - [ ] FFT analysis nodes
 - [ ] USB audio class support
 - [ ] `defmt` logging support
@@ -259,3 +269,10 @@ contested this way.
 ## License
 
 See [LICENSE](LICENSE).
+
+### Third-party code
+
+`teensy-audio/src/dsp/ladder.rs` is ported from the Teensy Audio Library's
+`filter_ladder.cpp`, copyright (c) 2021 Richard van Hoesel, under the MIT licence. His
+copyright notice and permission notice are kept at the top of that file, as the licence
+requires.
