@@ -112,6 +112,7 @@ nodes in the graph.
 
 | Kernel | Description |
 |--------|-------------|
+| `dsp::biquad::Biquad` | One biquad section, transposed direct form II, with the RBJ cookbook's low-pass and high-pass designs (the C++ `AudioFilterBiquad`'s `setLowpass` / `setHighpass`, in float); corners move without resetting the state |
 | `dsp::ladder::Ladder` | Moog ladder low-pass, a port of the C++ `AudioFilterLadder` (Huovilainen model, 4x oversampled through its 36-tap polyphase FIR) with a per-sample cutoff CV |
 
 ## Cargo features
@@ -260,7 +261,8 @@ contested this way.
 
 - [x] HAL integration examples (DMA-driven I²S on i.MX RT1062)
 - [ ] Additional waveforms (square, sawtooth, triangle, noise)
-- [ ] FIR / biquad filters
+- [ ] FIR filters; a biquad graph node
+- [x] Biquad section (`dsp::biquad`, a kernel; low-pass and high-pass designs)
 - [x] Ladder filter (`dsp::ladder`, a kernel; no graph node yet)
 - [ ] FFT analysis nodes
 - [ ] USB audio class support
