@@ -10,7 +10,7 @@
 //!
 //! ```ignore
 //! let mut codec = Sgtl5000::new(i2c, delay);
-//! codec.enable()?;           // Full power-on sequence with 400 ms ramp
+//! codec.enable()?;           // Power-on; skips the power-down if the codec is already up
 //! codec.volume(0.6)?;        // Set headphone volume
 //! codec.input_select(Input::LineIn)?;
 //! ```
@@ -39,6 +39,17 @@ pub enum HeadphoneSource {
     Dac,
     /// Route line-in directly to headphones (bypass DAC).
     LineIn,
+}
+
+/// Which power-on path [`Sgtl5000::enable()`] took.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Startup {
+    /// The codec was unpowered or unrecognised: the full sequence ran, and
+    /// LINE OUT's bias rose from 0 V.
+    Cold,
+    /// The codec was already up: the power-down was skipped and LINE OUT's
+    /// bias did not move.
+    Warm,
 }
 
 /// EQ mode selection for the Digital Audio Processor.
@@ -142,7 +153,7 @@ where
 
     // ── Power-on sequence ──────────────────────────────────────────────
 
-    /// Full power-on sequence for I2S slave mode at 44.1 kHz.
+    /// Power-on for I2S slave mode at 44.1 kHz, without a pop on a warm restart.
     ///
     /// Configures the codec with:
     /// - 44.1 kHz sample rate, 256×Fs MCLK
@@ -151,8 +162,68 @@ where
     /// - Zero-cross detection enabled
     /// - Headphone volume at minimum (call [`volume()`](Self::volume) to unmute)
     ///
-    /// Includes a 400 ms delay for the analog power ramp.
-    pub fn enable(&mut self) -> Result<(), I2C::Error> {
+    /// # Warm restart
+    ///
+    /// LINE OUT idles at a DC bias of about 1.65 V. The full power-on sequence
+    /// ([`enable_cold()`](Self::enable_cold)) opens by powering VAG and LINE OUT
+    /// down and brings them back up a few writes later, so a board that is
+    /// reflashed or reset while the codec keeps its power moves that bias down
+    /// and back up — a loud pop in whatever LINE OUT feeds. Mute does not help:
+    /// it removes signal, not bias.
+    ///
+    /// So this first asks whether the codec is already up: VAG and LINE OUT
+    /// powered, and `CHIP_I2S_CTRL` as this driver's slave-mode set-up leaves it.
+    /// If so it runs the same sequence without the power-down, without the
+    /// 400 ms ramp settle, and without the transient mute of `CHIP_ANA_CTRL`.
+    /// Every remaining write restates a value the codec already holds, so the
+    /// bias never moves, and the driver's own state ends as a cold start leaves
+    /// it.
+    ///
+    /// The detection fails toward cold. A false cold costs one pop; a false
+    /// warm would skip the power-up and leave the codec mute. Anything but
+    /// positive evidence, including a read that fails, runs the cold sequence.
+    /// A genuinely cold codec cannot pass: nothing has powered VAG up yet.
+    ///
+    /// A cold start still steps the bias up from 0 V; no firmware can avoid it.
+    ///
+    /// Returns which path ran, so a program can say so. Printing it is what
+    /// keeps "the pop is gone" from being confused with "the new code did not
+    /// run".
+    pub fn enable(&mut self) -> Result<Startup, I2C::Error> {
+        self.delay.delay_ms(5);
+        if self.is_up() {
+            self.enable_warm()?;
+            Ok(Startup::Warm)
+        } else {
+            self.enable_cold()?;
+            Ok(Startup::Cold)
+        }
+    }
+
+    /// Is the codec already powered and configured the way
+    /// [`enable_cold()`](Self::enable_cold) leaves it? Only positive evidence
+    /// counts; a failed read is a no.
+    fn is_up(&mut self) -> bool {
+        const VAG_POWERUP: u16 = 1 << 7;
+        const LINEOUT_POWERUP: u16 = 1 << 0;
+        const POWERED: u16 = VAG_POWERUP | LINEOUT_POWERUP;
+        // Slave mode. Master mode (`enable_with_pll`) leaves 0x00B0, so this
+        // also refuses to warm-start a codec configured some other way.
+        const I2S_CTRL_SLAVE: u16 = 0x0030;
+
+        let powered = matches!(
+            self.read_register(reg::CHIP_ANA_POWER),
+            Ok(v) if v & POWERED == POWERED
+        );
+        powered && matches!(self.read_register(reg::CHIP_I2S_CTRL), Ok(I2S_CTRL_SLAVE))
+    }
+
+    /// The full power-on sequence for I2S slave mode, from a codec that may be
+    /// unpowered. Includes a 400 ms delay for the analog power ramp.
+    ///
+    /// **Pops LINE OUT on a warm restart**; see [`enable()`](Self::enable). Use
+    /// it directly only to compare the two paths at the bench.
+    pub fn enable_cold(&mut self) -> Result<(), I2C::Error> {
         self.delay.delay_ms(5);
         self.muted = true;
 
@@ -177,6 +248,34 @@ where
         // Wait for analog power ramp
         self.delay.delay_ms(400);
 
+        self.write_configuration()
+    }
+
+    /// The power-on sequence for a codec that is already up: the cold sequence
+    /// without the power-down, the ramp settle, or the transient mute. See
+    /// [`enable()`](Self::enable).
+    fn enable_warm(&mut self) -> Result<(), I2C::Error> {
+        self.muted = true;
+
+        self.write_register(reg::CHIP_LINREG_CTRL, 0x006C)?;
+        self.write_register(reg::CHIP_REF_CTRL, 0x01F2)?;
+        self.write_register(reg::CHIP_LINE_OUT_CTRL, 0x0F22)?;
+        self.write_register(reg::CHIP_SHORT_CTRL, 0x4446)?;
+        // Already set, so a no-op; restated so the codec ends as a cold start
+        // leaves it whatever else changed.
+        self.write_register(reg::CHIP_ANA_POWER, 0x40FF)?;
+        self.write_register(reg::CHIP_DIG_POWER, 0x0073)?;
+
+        self.write_configuration()
+    }
+
+    /// The writes after power-up, common to both paths. The last one, to
+    /// `CHIP_ANA_CTRL`, must stay a write through
+    /// [`write_register()`](Self::write_register): it sets the cached copy that
+    /// [`volume()`](Self::volume) and the mute calls modify, and a cache left
+    /// at 0 would have the first `volume()` clear `SELECT_ADC` and both
+    /// zero-cross enables.
+    fn write_configuration(&mut self) -> Result<(), I2C::Error> {
         // Default ~1.3Vpp line output
         self.write_register(reg::CHIP_LINE_OUT_VOL, 0x1D1D)?;
         // 44.1 kHz, 256×Fs
@@ -710,7 +809,7 @@ where
 
     fn enable(&mut self) -> Result<(), Self::Error> {
         // Delegate to the inherent method
-        Sgtl5000::enable(self)
+        Sgtl5000::enable(self).map(|_| ())
     }
 
     fn disable(&mut self) -> Result<(), Self::Error> {
@@ -878,6 +977,96 @@ mod tests {
         // Last ANA_CTRL write is 0x0036
         assert_eq!(codec.ana_ctrl, 0x0036);
         assert!(codec.semi_automated);
+    }
+
+    /// A mock codec that is already up, as a reflash finds it.
+    fn warm_mock() -> MockI2c {
+        let mut i2c = MockI2c::new();
+        i2c.set_reg(reg::CHIP_ANA_POWER, 0x40FF);
+        i2c.set_reg(reg::CHIP_I2S_CTRL, 0x0030);
+        i2c
+    }
+
+    #[test]
+    fn enable_from_unpowered_codec_is_cold() {
+        let mut codec = make_codec();
+        assert_eq!(codec.enable().unwrap(), Startup::Cold);
+        let (i2c, _) = codec.release();
+        assert_eq!(i2c.write_at(0), (reg::CHIP_ANA_POWER, 0x4060));
+    }
+
+    #[test]
+    fn enable_on_warm_codec_never_powers_down() {
+        let mut codec = Sgtl5000::new(warm_mock(), MockDelay);
+        assert_eq!(codec.enable().unwrap(), Startup::Warm);
+        let (i2c, _) = codec.release();
+
+        // The cold sequence less the power-down and the transient 0x0137.
+        assert_eq!(i2c.log_count, 14);
+        for i in 0..i2c.log_count {
+            let (r, v) = i2c.write_at(i);
+            if r == reg::CHIP_ANA_POWER {
+                assert_eq!(v, 0x40FF, "ANA_POWER written other than fully up");
+            }
+            if r == reg::CHIP_ANA_CTRL {
+                assert_eq!(v, 0x0036, "transient mute written on the warm path");
+            }
+        }
+        assert_eq!(i2c.write_at(0), (reg::CHIP_LINREG_CTRL, 0x006C));
+        assert_eq!(i2c.write_at(13), (reg::CHIP_ANA_CTRL, 0x0036));
+    }
+
+    #[test]
+    fn warm_and_cold_end_in_the_same_state() {
+        let mut cold = make_codec();
+        cold.enable().unwrap();
+        let mut warm = Sgtl5000::new(warm_mock(), MockDelay);
+        warm.enable().unwrap();
+
+        assert_eq!(warm.ana_ctrl, cold.ana_ctrl);
+        assert_eq!(warm.muted, cold.muted);
+        assert_eq!(warm.semi_automated, cold.semi_automated);
+        let (cold_i2c, _) = cold.release();
+        let (warm_i2c, _) = warm.release();
+        for i in 0..cold_i2c.reg_count {
+            let (r, v) = cold_i2c.regs[i];
+            assert_eq!(warm_i2c.read_reg(r), v, "register {r:#06x} differs");
+        }
+    }
+
+    #[test]
+    fn detection_needs_every_piece_of_evidence() {
+        // VAG up but LINE OUT down.
+        let mut i2c = warm_mock();
+        i2c.set_reg(reg::CHIP_ANA_POWER, 0x40FE);
+        assert_eq!(
+            Sgtl5000::new(i2c, MockDelay).enable().unwrap(),
+            Startup::Cold
+        );
+
+        // LINE OUT up but VAG down.
+        let mut i2c = warm_mock();
+        i2c.set_reg(reg::CHIP_ANA_POWER, 0x407F);
+        assert_eq!(
+            Sgtl5000::new(i2c, MockDelay).enable().unwrap(),
+            Startup::Cold
+        );
+
+        // Powered, but in master mode.
+        let mut i2c = warm_mock();
+        i2c.set_reg(reg::CHIP_I2S_CTRL, 0x00B0);
+        assert_eq!(
+            Sgtl5000::new(i2c, MockDelay).enable().unwrap(),
+            Startup::Cold
+        );
+    }
+
+    #[test]
+    fn enable_cold_powers_down_even_when_warm() {
+        let mut codec = Sgtl5000::new(warm_mock(), MockDelay);
+        codec.enable_cold().unwrap();
+        let (i2c, _) = codec.release();
+        assert_eq!(i2c.write_at(0), (reg::CHIP_ANA_POWER, 0x4060));
     }
 
     // ── Volume tests ──────────────────────────────────────────────────

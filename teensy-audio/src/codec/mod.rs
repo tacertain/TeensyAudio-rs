@@ -10,4 +10,4 @@
 pub(crate) mod registers;
 mod sgtl5000;
 
-pub use sgtl5000::{EqMode, HeadphoneSource, Input, Sgtl5000};
+pub use sgtl5000::{EqMode, HeadphoneSource, Input, Sgtl5000, Startup};
